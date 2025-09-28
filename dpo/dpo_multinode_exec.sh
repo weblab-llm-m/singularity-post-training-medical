@@ -40,7 +40,7 @@ ulimit -v unlimited
 ulimit -n 65536
 ulimit -u 32768
 
-export WANDB_ENTITY=ken05-matuo-llm-88_llm_2025_suzuki
+export WANDB_ENTITY=llm-m_wandb-weblab
 
 MODEL=${1}
 MASTER_PORT=${2}
