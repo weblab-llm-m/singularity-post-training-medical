@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=dft_megatron_multinode_1
 #SBATCH --partition=P08317
-#SBATCH -nodelist=osk-gpu[40-43]
+#SBATCH --nodelist=osk-gpu[42-43,45,49]
 #SBATCH --nodes=4
 #SBATCH --gpus-per-node=8
 #SBATCH --cpus-per-task=128
@@ -18,6 +18,5 @@ export MASTER_PORT=9901
 
 MODEL=${1}
 echo "start srun"
-#srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home /home/Competition2025/P05/shareP05/share_envs/ms-swift-megatron_v3.7.3 \
-srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home /home/Competition2025/P03/P03U011/ms-swift-megatron \
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home /home/matsuolab/nishimae/singularity/ms-swift-megatron_v3.8.1 \
 bash dft_multinode_exec.sh ${MODEL}

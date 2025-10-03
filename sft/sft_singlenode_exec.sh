@@ -47,8 +47,7 @@ MASTER_PORT=${2}
 
 USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --load ${MODEL} \
-    --dataset /home/Competition2025/P05/shareP05/data/SFT_006_origin_2/train.parquet \
-    --val_dataset /home/Competition2025/P05/shareP05/data/SFT_006_origin_2/validation.parquet \
+    --dataset 'team-suzuki/SFT_006_origin_1' \
     --split_dataset_ratio 0.01 \
     --train_type lora \
     --lazy_tokenize true \

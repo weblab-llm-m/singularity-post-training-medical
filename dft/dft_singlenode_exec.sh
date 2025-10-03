@@ -47,8 +47,7 @@ MASTER_PORT=${2}
 
 USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --load ${MODEL} \
-    --dataset /home/Competition2025/P05/shareP05/data/DFT_235B-Thinking_006_origin_1/train.parquet \
-    --val_dataset /home/Competition2025/P05/shareP05/data/DFT_235B-Thinking_006_origin_1/validation.parquet \
+    --dataset team-suzuki/DFT_235B-Thinking_006_origin_1 \
     --split_dataset_ratio 0.01 \
     --enable_dft_loss true \
     --train_type lora \
@@ -79,5 +78,5 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --no_save_rng true \
     --attention_backend flash \
     --wandb_exp_name test_multinode \
-    --wandb_project sft_megatron \
+    --wandb_project sft_megatron_30b \
     --wandb_save_dir wandb_logs
