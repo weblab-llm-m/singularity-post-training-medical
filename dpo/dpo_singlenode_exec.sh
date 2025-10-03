@@ -45,22 +45,24 @@ export WANDB_ENTITY=llm-m_wandb-weblab
 MODEL=${1}
 MASTER_PORT=${2}
 
-USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron rlhf \
+USE_HF=1 MASTER_PORT=${MASTER_PORT} megatron rlhf \
     --rlhf_type dpo \
     --load ${MODEL} \
-    --dataset mlabonne/orpo-dpo-mix-40k \
+    --dataset team-suzuki/DPO_006_1 \
+    --columns '{"chosen":"messages","rejected":"rejected_messages"}' \
     --train_type lora \
-    --lora_rank 16 \
+    --lora_rank 8 \
     --lora_alpha 32 \
     --target_modules all-linear \
-    --split_dataset_ratio 0.01 \
-    --expert_model_parallel_size 8 \
+    --split_dataset_ratio 0.1 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
     --moe_permute_fusion true \
     --moe_grouped_gemm true \
     --moe_shared_expert_overlap true \
     --moe_aux_loss_coeff 1e-3 \
-    --micro_batch_size 16 \
-    --global_batch_size 128 \
+    --micro_batch_size 2 \
+    --global_batch_size 32 \
     --recompute_granularity full \
     --recompute_method uniform \
     --recompute_num_layers 1 \
@@ -70,18 +72,20 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron rlhf \
     --lr 1e-4 \
     --lr_warmup_fraction 0.05 \
     --min_lr 1e-5 \
-    --save megatron_output/multinode/${MODEL} \
+    --save megatron_output/dpo/Qwen3-30B-A3B-Thinking-2507/006_1 \
     --eval_interval 100 \
     --save_interval 400 \
     --max_length 16384 \
     --num_workers 8 \
     --dataset_num_proc 8 \
+    --truncation_strategy right \
     --no_save_optim true \
     --no_save_rng true \
     --sequence_parallel true \
     --attention_backend flash \
     --beta 0.1 \
     --loss_type sigmoid \
-    --wandb_exp_name test_dpo \
-    --wandb_project dpo_megatron \
+    --loss_scale ignore_empty_think \
+    --wandb_exp_name 006_1 \
+    --wandb_project dpo_30b \
     --wandb_save_dir wandb_logs

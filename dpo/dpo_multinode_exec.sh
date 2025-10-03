@@ -45,15 +45,15 @@ export WANDB_ENTITY=llm-m_wandb-weblab
 MODEL=${1}
 MASTER_PORT=${2}
 
-USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron rlhf \
+USE_HF=1 MASTER_PORT=${MASTER_PORT} megatron rlhf \
     --rlhf_type dpo \
     --load ${MODEL} \
-    --dataset mlabonne/orpo-dpo-mix-40k \
+    --dataset team-suzuki/DPO_006_1_withloop \
     --train_type lora \
     --lora_rank 16 \
     --lora_alpha 32 \
     --target_modules all-linear \
-    --split_dataset_ratio 0.01 \
+    --split_dataset_ratio 0.05 \
     --tensor_model_parallel_size 2 \
     --pipeline_model_parallel_size 2 \
     --expert_model_parallel_size 4 \
@@ -62,29 +62,31 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron rlhf \
     --moe_grouped_gemm true \
     --moe_shared_expert_overlap true \
     --moe_aux_loss_coeff 1e-3 \
-    --micro_batch_size 16 \
-    --global_batch_size 128 \
+    --micro_batch_size 1 \
+    --global_batch_size 32 \
     --recompute_granularity full \
     --recompute_method uniform \
     --recompute_num_layers 1 \
     --max_epochs 1 \
     --finetune true \
     --cross_entropy_loss_fusion true \
-    --lr 1e-4 \
+    --lr 5e-5 \
     --lr_warmup_fraction 0.05 \
-    --min_lr 1e-5 \
-    --save megatron_output/multinode/${MODEL} \
+    --min_lr 1e-6 \
+    --save megatron_output/dpo/Qwen3-235B-A22B-Thinking-2507/006_1_withloop \
     --eval_interval 100 \
     --save_interval 400 \
     --max_length 16384 \
-    --num_workers 8 \
-    --dataset_num_proc 8 \
+    --num_workers 4 \
+    --dataset_num_proc 4 \
+    --truncation_strategy right \
     --no_save_optim true \
     --no_save_rng true \
     --sequence_parallel true \
     --attention_backend flash \
     --beta 0.1 \
     --loss_type sigmoid \
-    --wandb_exp_name dpo_4node \
-    --wandb_project dpo_megatron \
+    --loss_scale ignore_empty_think \
+    --wandb_exp_name 006_1_withloop \
+    --wandb_project dpo_235b \
     --wandb_save_dir wandb_logs

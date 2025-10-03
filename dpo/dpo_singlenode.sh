@@ -20,4 +20,4 @@ export MASTER_PORT=29500
 MODEL=${1}
 echo "start srun"
 srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home /home/matsuolab/nishimae/singularity/ms-swift-megatron_v3.8.1 \
-bash 25_dpo_singlenode_exec.sh ${MODEL} ${MASTER_PORT}
+bash dpo_singlenode_exec.sh ${MODEL} ${MASTER_PORT}
