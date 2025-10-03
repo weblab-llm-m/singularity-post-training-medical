@@ -1,6 +1,6 @@
 # singularity-post-training-medical
 
-ms-swiftの実験コードおよびテンプレートを提供します。  
+ms-swift3.8.1のsingularityの実験コードおよびテンプレートを提供します。  
 実験管理のため、一定のディレクトリ構造や命名規則に従って構成されています。
 
 ## Overview
