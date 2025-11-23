@@ -48,7 +48,7 @@ MODEL=${1}
 
 USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --load ${MODEL} \
-    --dataset team-suzuki/DFT_235B-Thinking_006_origin_1 \
+    --dataset weblab-LLM-M/igakuqa-2001-2024-filtered \
     --split_dataset_ratio 0.01 \
     --train_type lora \
     --lazy_tokenize true \
@@ -86,7 +86,7 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --no_save_optim true \
     --no_save_rng true \
     --attention_backend flash \
-    --wandb_exp_name dft_4node \
-    --wandb_project dft_megatron \
+    --wandb_exp_name dft_gakuqa_lora_235B_5 \
+    --wandb_project dft_megatron_235B_gakuqa_model_training \
     --enable_dft_loss true \
     --wandb_save_dir wandb_logs

@@ -47,17 +47,27 @@ MASTER_PORT=${2}
 
 USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --load ${MODEL} \
-    --dataset 'team-suzuki/SFT_006_origin_1' \
+    --dataset 'weblab-LLM-M/igakuqa-2001-2024-filtered' \
+    --model_type qwen3_moe \
     --split_dataset_ratio 0.01 \
     --train_type lora \
     --lazy_tokenize true \
     --lora_rank 8 \
     --lora_alpha 32 \
     --target_modules all-linear \
-    --expert_model_parallel_size 8 \
+    --tensor_model_parallel_size 2 \
+    --pipeline_model_parallel_size 2 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-3 \
+    --moe_expert_capacity_factor 1.0 \
+    --moe_token_dispatcher_type alltoall \
     --sequence_parallel true \
-    --micro_batch_size 1 \
-    --global_batch_size 16 \
+    --micro_batch_size 4 \
+    --global_batch_size 32 \
     --recompute_granularity full \
     --recompute_method uniform \
     --recompute_num_layers 1 \
@@ -69,13 +79,13 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --max_epochs 1 \
     --save megatron_output/multinode/${MODEL} \
     --eval_interval 200 \
-    --save_interval 200 \
+    --save_interval 400 \
     --max_length 16384 \
     --num_workers 8 \
     --dataset_num_proc 8 \
     --no_save_optim true \
     --no_save_rng true \
     --attention_backend flash \
-    --wandb_exp_name test_multinode \
-    --wandb_project sft_megatron \
+    --wandb_exp_name sft_igakuqa_235B_lora_18 \
+    --wandb_project sft_megatron_235B_igakuqa_model_training \
     --wandb_save_dir wandb_logs

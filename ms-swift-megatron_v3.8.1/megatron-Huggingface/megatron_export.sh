@@ -5,7 +5,7 @@ ulimit -v unlimited
 ulimit -n 65536
 ulimit -u 32768
 
-export MODEL_NAME=Qwen3-30B-A3B-Instruct-2507
+export MODEL_NAME=Qwen3-Next-80B-A3B-Instruct-Instruct
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 # megatronのモデルに変換する
