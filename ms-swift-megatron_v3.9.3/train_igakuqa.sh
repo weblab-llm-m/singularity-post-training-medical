@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=grpo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -33,7 +33,7 @@ DATASET_JSONL=${DATASET_JSONL:-$SWIFT_WORKDIR/dataset/igakuqa/train/rl_ophtho_v2
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
-MAX_MODEL_LEN=${MAX_MODEL_LEN:-8192}          # max_length / vLLM max_model_len に利用
+MAX_MODEL_LEN=${MAX_MODEL_LEN:4096}          # max_length / vLLM max_model_len に利用
 MAX_COMPLETION_LEN=${MAX_COMPLETION_LEN:-4096}
 
 PROJECT_NAME=${PROJECT_NAME:-megatron_swift_qwen_next80b}
@@ -91,19 +91,19 @@ srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
   --env TRITON_CACHE_DIR="${TRITON_CACHE_DIR}" \
   "${SIF_FILE}" bash -lc '
     python - <<PY || true
-    import torch
-    torch.cuda.init()
-    a=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
-    b=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
-    c=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
-    try:
-    from flash_attn.flash_attn_interface import flash_attn_func
-    flash_attn_func(a,b,c,causal=True)
-    print("[warmup] flash-attn ok")
-    except Exception as e:
-    print("[warmup] skipped:", e)
-    PY
-    '
+import torch
+torch.cuda.init()
+a=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
+b=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
+c=torch.randn(1,128,64,device="cuda",dtype=torch.bfloat16)
+try:
+  from flash_attn.flash_attn_interface import flash_attn_func
+  flash_attn_func(a,b,c,causal=True)
+  print("[warmup] flash-attn ok")
+except Exception as e:
+  print("[warmup] skipped:", e)
+PY
+  '
 
 # ===== ③ 学習本体 (Megatron GRPO, vLLM colocate + DAPO 設定) =====
 srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per-node=1 --kill-on-bad-exit=1 \
@@ -190,7 +190,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
           --expert_model_parallel_size 1 \
-          --pipeline_model_parallel_size 24 \
+          --pipeline_model_parallel_size 16 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
@@ -202,6 +202,9 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --recompute_method uniform \
           --recompute_num_layers 1 \
           --use_precision_aware_optimizer true \
+          --moe_grouped_gemm true \
+          --moe_shared_expert_overlap true \
+          --moe_aux_loss_coeff 1e-3 \
           --optimizer_cpu_offload true \
           --optimizer_offload_fraction 1.0 \
           --finetune \
