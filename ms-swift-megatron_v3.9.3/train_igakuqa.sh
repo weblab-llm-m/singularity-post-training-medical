@@ -14,7 +14,7 @@ set -xeuo pipefail
 
 # ===== 共通 =====
 # Swift の作業ディレクトリ（v2）
-SWIFT_WORKDIR=${SWIFT_WORKDIR:-<your head directory>}
+SWIFT_WORKDIR=${SWIFT_WORKDIR:-/home/fumitaka.hara/swift-RL}
 
 # 最新 ms-swift のソースツリー（Singularity 外）
 MS_SWIFT_DIR=${MS_SWIFT_DIR:-$SWIFT_WORKDIR/containers/ms-swift}
@@ -24,7 +24,7 @@ MEGATRON_LM_PATH=${MEGATRON_LM_PATH:-$SWIFT_WORKDIR/containers/megatron-lm-core_
 SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 
 # 元の（共有FS上の）モデル格納場所（Qwen3-Next-80B-A3B-Instruct はそのまま）
-LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-/home/matsuolab/Nishijima2/Models/HF/SFT/Qwen3-Next-80B-A3B-Instruct/Qwen3-Next-80B-A3B-Instruct-exp8-lr1e6-qwen-long-dft}
+LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-/home/fumitaka.hara/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
 MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 
 # GRPO / DAPO 用 JSONL データ（眼科MCQ）
@@ -33,7 +33,7 @@ DATASET_JSONL=${DATASET_JSONL:-$SWIFT_WORKDIR/dataset/igakuqa/train/rl_ophtho_v2
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
-MAX_MODEL_LEN=${MAX_MODEL_LEN:4096}          # max_length / vLLM max_model_len に利用
+MAX_MODEL_LEN=${MAX_MODEL_LEN:-4096}          # max_length / vLLM max_model_len に利用
 MAX_COMPLETION_LEN=${MAX_COMPLETION_LEN:-4096}
 
 PROJECT_NAME=${PROJECT_NAME:-megatron_swift_qwen_next80b}
@@ -112,9 +112,9 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     -B "${SWIFT_WORKDIR}:${SWIFT_WORKDIR}" \
     -B "${MS_SWIFT_DIR}:${MS_SWIFT_DIR}" \
     -B "${MEGATRON_LM_PATH}:${MEGATRON_LM_PATH}" \
+    -B "${MODEL_PATH}:${MODEL_PATH}" \
     -B "/dev/shm:/dev/shm" \
     --home "${HF_CACHE}:/root" \
-    --env HOME=/root \
     --env NODE_RANK="${SLURM_NODEID}" \
     --env NNODES="${SLURM_JOB_NUM_NODES}" \
     --env NPROC_PER_NODE="${NPROC_PER_NODE}" \
@@ -131,7 +131,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env GLOO_SOCKET_IFNAME="${GLOO_SOCKET_IFNAME}" \
     --env MS_SWIFT_DIR="${MS_SWIFT_DIR}" \
     --env MEGATRON_LM_PATH="${MEGATRON_LM_PATH}" \
-    --env WANDB_API_KEY='your api key' \
+    --env WANDB_API_KEY='47e80ec4f175b65c802397e1119d9a4972f9601a' \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
     --env WANDB_DIR=${OUTPUT_DIR} \
@@ -160,13 +160,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/plugin.py \
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/igaku_plugin.py \
           --rlhf_type grpo \
-          --loss_type bnpo \
+          --loss_type grpo \
           --beta 0.02 \
-          --importance_sampling_level token \
-          --epsilon 0.2 \
-          --epsilon_high 0.28 \
-          --dynamic_sample true \
-          --max_resample_times 3 \
           --overlong_filter true \
           --reward_funcs ophtho soft_overlong \
           --reward_weights 1.0 0.2 \
@@ -189,8 +184,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --torch_dtype ${DTYPE} \
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
-          --expert_model_parallel_size 1 \
-          --pipeline_model_parallel_size 16 \
+          --expert_model_parallel_size 8 \
+          --pipeline_model_parallel_size 4 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
