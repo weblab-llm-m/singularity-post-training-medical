@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=grpo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=4
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -11,6 +11,7 @@
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 set -xeuo pipefail
+source .env
 
 # ===== 共通 =====
 # Swift の作業ディレクトリ（v2）
@@ -27,9 +28,10 @@ SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-/home/fumitaka.hara/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
 MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 
-# GRPO / DAPO 用 JSONL データ（眼科MCQ）
-# messages + answer を含む rl_ophtho.jsonl を想定
-DATASET_JSONL=${DATASET_JSONL:-$SWIFT_WORKDIR/dataset/igakuqa/train/rl_ophtho_v2.jsonl}
+# GRPO 用 JSONL データ（過去IgakuQA）
+# messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
+DATASET_JSONL=${DATASET_JSONL:-/home/fumitaka.hara/downloads/datasets/igakuqa.jsonl}
+
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -114,10 +116,12 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     -B "${MEGATRON_LM_PATH}:${MEGATRON_LM_PATH}" \
     -B "${MODEL_PATH}:${MODEL_PATH}" \
     -B "/dev/shm:/dev/shm" \
+    -B "${DATASET_JSONL}:${DATASET_JSONL}" \
     --home "${HF_CACHE}:/root" \
     --env NODE_RANK="${SLURM_NODEID}" \
     --env NNODES="${SLURM_JOB_NUM_NODES}" \
     --env NPROC_PER_NODE="${NPROC_PER_NODE}" \
+    --env HF_TOKEN="${HF_TOKEN}" \
     --env HF_HOME="${HF_CACHE}" \
     --env HF_DATASETS_CACHE="${HF_CACHE}/datasets" \
     --env HUGGINGFACE_HUB_CACHE="${HF_CACHE}/hub" \
@@ -131,7 +135,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env GLOO_SOCKET_IFNAME="${GLOO_SOCKET_IFNAME}" \
     --env MS_SWIFT_DIR="${MS_SWIFT_DIR}" \
     --env MEGATRON_LM_PATH="${MEGATRON_LM_PATH}" \
-    --env WANDB_API_KEY='47e80ec4f175b65c802397e1119d9a4972f9601a' \
+    --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
     --env WANDB_DIR=${OUTPUT_DIR} \
@@ -185,14 +189,15 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
           --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 4 \
+          --pipeline_model_parallel_size 8 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
           --save_safetensors true \
-          --offload_model true \
-          --offload_optimizer true \
+          --offload_model false \
+          --offload_optimizer false \
           --use_distributed_optimizer \
+          --optimizer_cpu_offload false \
           --recompute_granularity full \
           --recompute_method uniform \
           --recompute_num_layers 1 \
@@ -200,10 +205,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_grouped_gemm true \
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
-          --optimizer_cpu_offload true \
-          --optimizer_offload_fraction 1.0 \
           --finetune \
-          --global_batch_size 256 \
+          --global_batch_size 512 \
           --micro_batch_size 1 \
           --steps_per_generation 3 \
           --num_generations ${NUM_GENERATIONS} \
@@ -226,6 +229,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_optim \
           --no_save_rng \
           --split_dataset_ratio 0.05 \
-          --wandb_project 'your project name' \
-          --wandb_exp_name 'your exp name'
+          --wandb_project 'Ramen_GRPO_GSPO_TRY' \
+          --wandb_exp_name 'gspo'
     "
