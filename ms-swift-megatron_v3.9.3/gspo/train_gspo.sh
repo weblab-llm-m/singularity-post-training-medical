@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gspo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
+#SBATCH --nodes=12
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -11,7 +11,7 @@
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 set -xeuo pipefail
-source .env
+source /home/fumitaka.hara/singularity-post-training-medical/.env
 
 # ===== 共通 =====
 # Swift の作業ディレクトリ（v2）
@@ -138,7 +138,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
-    --env WANDB_DIR=${OUTPUT_DIR} \
+    --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
     "${SIF_FILE}" bash -lc "
@@ -165,11 +165,11 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/igaku_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --importance_sampling_level sequence \    # ← これを追加（GSPOの核心）
-          --epsilon 3e-4 \                          # ← 追加（GSPOの推奨値）
-          --epsilon_high 4e-4 \                     # ← 追加（GSPOの推奨値）
-          --beta 0 \                                # ← 0に変更（GSPOではKL正則化をゼロに）
-          --steps_per_generation 4 \                # ← 4に変更（論文の推奨値）
+          --importance_sampling_level sequence \
+          --epsilon 3e-4 \
+          --epsilon_high 4e-4 \
+          --beta 0 \
+          --steps_per_generation 4 \
           --overlong_filter true \
           --reward_funcs ophtho soft_overlong \
           --reward_weights 1.0 0.2 \
@@ -184,8 +184,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --lr_warmup_fraction 0.03 \
           --log_interval 1 \
           --use_hf true \
-          --dataset '${DATASET_JSONL}' \
-          --model '${MODEL_PATH}' \
+          --dataset ${DATASET_JSONL} \
+          --model ${MODEL_PATH} \
           --model_type qwen3_next \
           --bf16 true \
           --train_type full \
@@ -193,7 +193,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
           --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 8 \
+          --pipeline_model_parallel_size 12 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \

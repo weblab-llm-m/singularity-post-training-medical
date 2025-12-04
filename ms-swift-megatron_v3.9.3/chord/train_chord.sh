@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo_learn
+#SBATCH --job-name=chord_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
 #SBATCH --ntasks-per-node=1
@@ -230,5 +230,5 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'gspo'
+          --wandb_exp_name 'chord'
     "
