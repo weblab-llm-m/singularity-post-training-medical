@@ -77,6 +77,11 @@ export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | 
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
 
+srun --nodes=${SLURM_JOB_NUM_NODES} \
+     --ntasks=${SLURM_JOB_NUM_NODES} \
+     --ntasks-per-node=1 \
+     bash /home/matsuolab/scripts/cleanup_ram.sh
+
 # ===== 軽いプリウォーム（flash-attn ビルド） =====
 srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
   -B "${CUDA_HOME}:${CUDA_HOME}" \
@@ -138,7 +143,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
-    --env WANDB_DIR="${OUTPUT_DIR}" \
+    --env WANDB_DIR=${OUTPUT_DIR} \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
     "${SIF_FILE}" bash -lc "
@@ -167,8 +172,9 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --loss_type grpo \
           --beta 0.02 \
           --overlong_filter true \
-          --reward_funcs ophtho soft_overlong \
-          --reward_weights 1.0 0.2 \
+          --reward_funcs ophtho cosine repetition \
+          --cosine_max_len 2048 \
+          --reward_weights 1.0 0.3 0.2 \
           --soft_cache_length 1024 \
           --max_epochs 5 \
           --eval_interval 50 \
@@ -230,5 +236,11 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'gspo'
+          --wandb_exp_name 'grpo_reward' \
+          --log_completions true
     "
+
+srun --nodes=${SLURM_JOB_NUM_NODES} \
+     --ntasks=${SLURM_JOB_NUM_NODES} \
+     --ntasks-per-node=1 \
+     bash /home/matsuolab/scripts/cleanup_ram.sh
