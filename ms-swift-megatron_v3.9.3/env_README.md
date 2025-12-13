@@ -34,7 +34,8 @@ singularity-post-training-medical/
 # 2. Singularityを用意する
 ```
 cd swift-RL/containers
-singularity pull swift3.9.3.sif docker:modelscope-registry
+singularity pull swift3.9.3.sif docker:modelscope-registry.us-west-1.cr.aliyuncs.com/modelscope-repo/modelscope:ubuntu22.04-cuda12.8.1-py311-torch2.8.0-vllm0.11.0-modelscope1.31.0-swift3.9.3
+
 ```
 
 # 3. ms-swiftを用意する
