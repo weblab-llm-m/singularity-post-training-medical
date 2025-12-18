@@ -3,6 +3,7 @@
 
 
 # 0. Clone
+[Swift-RLリポジトリ](https://github.com/weblab-llm-m/swift-RL/tree/main)
 ```
 git clone swift-RLリポジトリ(git@github.com:weblab-llm-m/swift-RL.git)
 git clone このリポジトリ
@@ -43,7 +44,7 @@ singularity pull swift3.9.3.sif docker:modelscope-registry.us-west-1.cr.aliyuncs
 cd swift-RL/containers
 git clone https://github.com/modelscope/ms-swift.git
 cp swift-RL/src/swift/patch_promptid.py swift-RL/containers/ms-swift/examples/train/grpo/plugin
-cp swift-RL/src/swift/igaku_plugin.py swift-RL/containers/ms-swift/examples/train/grpo/plugin
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp swift-RL/src/swift/qwen3_next.py swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
 ```
 
@@ -57,12 +58,7 @@ git clone --branch core_r0.14.0 https://github.com/NVIDIA/Megatron-LM.git megatr
 
 起動時に **コンテナへ bind** し、**`MEGATRON_LM_PATH`** と **`PYTHONPATH`** に追加します。(実装済み)
 
-# 5. Dataset作成（IgakuQA過去問）
-```
-python Haraのtoolのもの
-```
-
-# 6. envファイル設定
+# 5. envファイル設定
 singularity-post-training-medical以下に作成
 形式
 ```
@@ -70,7 +66,22 @@ WANDB_API_KEY="api_key"
 HF_TOKEN="api_key"
 ```
 
-# 7. 実行
+# 6. Dataset作成（IgakuQA過去問）本来Datasetを絞る必要があるが未対応
+```
+singularity shell --nv \
+  -B "$HOME/swift-RL:$HOME/swift-RL" \
+  -B "/dev/shm:/dev/shm" \
+  $HOME/swift-RL/containers/swift3.9.3.sif
+python tools/dataset.py
+```
+
+# 7. Modelダウンロード
+```
+# Singularity環境入った状態で
+python huggingface_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+```
+
+# 8. 実行
 ```
 cd singularity-post-training-medical/grpo
 sbatch train_*.sh

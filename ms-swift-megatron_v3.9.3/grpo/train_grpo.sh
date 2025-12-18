@@ -163,7 +163,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --custom_register_path ${SWIFT_WORKDIR}/src/swift/patch_promptid.py \
           --external_plugins \
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/plugin.py \
-            ${MS_SWIFT_DIR}/examples/train/grpo/plugin/igaku_plugin.py \
+            ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_ophtho_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
           --beta 0.02 \
