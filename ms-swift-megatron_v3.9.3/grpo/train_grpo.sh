@@ -2,6 +2,7 @@
 #SBATCH --job-name=grpo_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
+#SBATCH --nodelist=osk-gpu[06,09,11,14-18]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -11,11 +12,11 @@
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 set -xeuo pipefail
-source /home/fumitaka.hara/singularity-post-training-medical/.env
+source $HOME/singularity-post-training-medical/.env
 
 # ===== 共通 =====
 # Swift の作業ディレクトリ（v2）
-SWIFT_WORKDIR=${SWIFT_WORKDIR:-/home/fumitaka.hara/swift-RL}
+SWIFT_WORKDIR=${SWIFT_WORKDIR:-$HOME/swift-RL}
 
 # 最新 ms-swift のソースツリー（Singularity 外）
 MS_SWIFT_DIR=${MS_SWIFT_DIR:-$SWIFT_WORKDIR/containers/ms-swift}
@@ -25,12 +26,12 @@ MEGATRON_LM_PATH=${MEGATRON_LM_PATH:-$SWIFT_WORKDIR/containers/megatron-lm-core_
 SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 
 # 元の（共有FS上の）モデル格納場所（Qwen3-Next-80B-A3B-Instruct はそのまま）
-LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-/home/fumitaka.hara/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
+LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-$HOME/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
 MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 
 # GRPO 用 JSONL データ（過去IgakuQA）
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
-DATASET_JSONL=${DATASET_JSONL:-/home/fumitaka.hara/downloads/datasets/igakuqa.jsonl}
+DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 
 
 # 学習パラメータ
@@ -76,11 +77,6 @@ export MASTER_PORT=${MASTER_PORT:-29500}
 export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | awk "/default/ {print \$5}")}
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
-
-srun --nodes=${SLURM_JOB_NUM_NODES} \
-     --ntasks=${SLURM_JOB_NUM_NODES} \
-     --ntasks-per-node=1 \
-     bash /home/matsuolab/scripts/cleanup_ram.sh
 
 # ===== 軽いプリウォーム（flash-attn ビルド） =====
 srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
@@ -172,9 +168,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --loss_type grpo \
           --beta 0.02 \
           --overlong_filter true \
-          --reward_funcs ophtho cosine repetition \
-          --cosine_max_len 2048 \
-          --reward_weights 1.0 0.3 0.2 \
+          --reward_funcs ophtho \
+          --reward_weights 1.5 \
           --soft_cache_length 1024 \
           --max_epochs 5 \
           --eval_interval 50 \
@@ -240,7 +235,3 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --log_completions true
     "
 
-srun --nodes=${SLURM_JOB_NUM_NODES} \
-     --ntasks=${SLURM_JOB_NUM_NODES} \
-     --ntasks-per-node=1 \
-     bash /home/matsuolab/scripts/cleanup_ram.sh
