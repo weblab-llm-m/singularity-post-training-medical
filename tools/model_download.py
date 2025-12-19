@@ -7,6 +7,10 @@ Hugging Face Model & Dataset Downloader
 from huggingface_hub import snapshot_download
 import argparse
 import os
+from dotenv import load_dotenv
+
+# envファイル読み込み
+load_dotenv()
 
 def download_model(model_id: str, save_dir: str = "./models"):
     """
@@ -79,5 +83,5 @@ if __name__ == "__main__":
     main()
 
 # 使用方法
-# python huggingface_download.py --model bert-base-uncased
-# python huggingface_download.py --dataset squad
+# python model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+# python model_download.py --dataset squad
