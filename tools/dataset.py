@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 from datasets import load_dataset
 from huggingface_hub import login
+from dotenv import load_dotenv
+
+# envファイル読み込み
+load_dotenv()
 
 def clean_choice(raw):
     """
@@ -86,6 +90,10 @@ def convert_orig_to_ms_swift_rl(
 
     with out_path.open("w", encoding="utf-8") as fout:
         for ex in dataset:  # ファイル読み込みからdatasetイテレーションに変更
+            # もし 2023 と 2024 両方除外したい場合は ex.get("year") in [2023, 2024, "2023", "2024"] とします
+            if str(ex.get("year")) in [2023, 2024, "2023", "2024"]:
+                continue
+
             if not ex["text_only"]:
                 continue
             
@@ -94,12 +102,12 @@ def convert_orig_to_ms_swift_rl(
 
             required = get_required_answer_count(ex["problem_text"])
             if required is not None and len(ex["answer"]) != required:
-                print(f"skip mismatch: id={ex.get('problem_id')}, required={required}, got={len(ex['answer'])}")
+                # Debug用
+                # print(f"skip mismatch: id={ex.get('problem_id')}, required={required}, got={len(ex['answer'])}")
                 continue
 
             prompt = build_prompt(ex["problem_text"], ex["choices"])
 
-            # ============ ここを修正 ============
             # リストを文字列に変換
             answer_list = clean_choice(ex["answer"])
             if isinstance(answer_list, list):
