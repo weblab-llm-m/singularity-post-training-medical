@@ -4,7 +4,8 @@
 
 # 0. Clone
 [Swift-RLリポジトリ](https://github.com/weblab-llm-m/swift-RL/tree/main)
-```
+```bash
+cd
 git clone swift-RLリポジトリ(git@github.com:weblab-llm-m/swift-RL.git)
 git clone このリポジトリ
 ```
@@ -33,35 +34,35 @@ singularity-post-training-medical/
 ```
 
 # 2. Singularityを用意する
-```
-cd swift-RL/containers
+```bash
+cd ~/swift-RL/containers
 singularity pull swift3.9.3.sif docker:modelscope-registry.us-west-1.cr.aliyuncs.com/modelscope-repo/modelscope:ubuntu22.04-cuda12.8.1-py311-torch2.8.0-vllm0.11.0-modelscope1.31.0-swift3.9.3
-
 ```
 
 # 3. ms-swiftを用意する
-```
-cd swift-RL/containers
+```bash
+cd ~/swift-RL/containers
 git clone https://github.com/modelscope/ms-swift.git
-cp swift-RL/src/swift/patch_promptid.py swift-RL/containers/ms-swift/examples/train/grpo/plugin
-cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py swift-RL/containers/ms-swift/examples/train/grpo/plugin
-cp swift-RL/src/swift/qwen3_next.py swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
+# ms-swiftのpatchやplugin（拡張機能）を追加
+cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
+cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
 ```
 
 # 4. Megatron-LM（training）を用意する。
 Megatron GRPO は **`megatron.training`** を import します。pip の `megatron-core` だけでは不足するため、**Megatron-LM リポジトリ（core_r0.14.0）** を clone してパスを通します。
 
 ```bash
-cd swift-RL/containers
+cd ~/swift-RL/containers
 git clone --branch core_r0.14.0 https://github.com/NVIDIA/Megatron-LM.git megatron-lm-core_r0.14.0
 ```
 
 起動時に **コンテナへ bind** し、**`MEGATRON_LM_PATH`** と **`PYTHONPATH`** に追加します。(実装済み)
 
 # 5. envファイル設定
-singularity-post-training-medical以下に作成
+singularity-post-training-medical以下に`.env`作成
 形式
-```
+```env
 WANDB_API_KEY="api_key"
 HF_TOKEN="api_key"
 ```
@@ -78,11 +79,11 @@ python tools/dataset.py
 # 7. Modelダウンロード
 ```
 # Singularity環境入った状態で
-python huggingface_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+python tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
 ```
 
 # 8. 実行
 ```
-cd singularity-post-training-medical/grpo
+cd ~/singularity-post-training-medical/ms-swift-megatron_v3.9.3/grpo
 sbatch train_*.sh
 ```
