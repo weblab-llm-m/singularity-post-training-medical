@@ -46,6 +46,7 @@ git clone https://github.com/modelscope/ms-swift.git
 # ms-swiftのpatchやplugin（拡張機能）を追加
 cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_chinese_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
 ```
 
@@ -67,7 +68,7 @@ WANDB_API_KEY="api_key"
 HF_TOKEN="api_key"
 ```
 
-# 6. Dataset作成（IgakuQA過去問）本来Datasetを絞る必要があるが未対応
+# 6. Dataset作成（IgakuQA過去問）年度を絞っている（評価で使用するため）
 ```
 singularity shell --nv \
   -B "$HOME/swift-RL:$HOME/swift-RL" \
