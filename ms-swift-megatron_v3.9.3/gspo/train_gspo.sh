@@ -2,7 +2,7 @@
 #SBATCH --job-name=gspo_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=12
-#SBATCH --nodelist=osk-gpu[06,09,11,14-18]
+#SBATCH --nodelist=osk-gpu[52-60,62-64]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -165,18 +165,19 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --external_plugins \
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/plugin.py \
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_ophtho_plugin.py \
+            ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
           --importance_sampling_level sequence \
           --epsilon 3e-4 \
           --epsilon_high 4e-4 \
-          --beta 0 \
+          --beta 0.1 \
           --steps_per_generation 4 \
           --overlong_filter true \
-          --reward_funcs ophtho soft_overlong \
-          --reward_weights 1.0 0.2 \
+          --reward_funcs ophtho chinese \
+          --reward_weights 1.5 0.3 \
           --soft_cache_length 1024 \
-          --max_epochs 5 \
+          --max_epochs 1 \
           --eval_interval 50 \
           --save_interval 50 \
           --sleep_level 1 \
@@ -236,5 +237,5 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'gspo'
+          --wandb_exp_name 'gspo_reward_chinese_0.3'
     "
