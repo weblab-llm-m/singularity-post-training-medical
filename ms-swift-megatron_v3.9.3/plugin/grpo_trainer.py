@@ -155,6 +155,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         logger.info(f'CHORD enabled: mu={self.chord_mu}, mu_type={self.chord_mu_type}, '
                 f'phi_type={self.chord_phi_type}, sft_dataset={self.chord_sft_dataset}')
     
+    
     def _setup_chord_dataloader(self, data_collator):
         """Setup CHORD SFT dataloader"""
         from swift.llm import load_dataset
@@ -171,18 +172,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
         
-        try:
-            # load_datasetはリストを受け取り、タプル(train_dataset, val_dataset)を返す
-            # または単一の文字列を渡すとタプル(dataset, None)を返す
-            chord_dataset, _ = load_dataset(
-                dataset_string,
-                strict=False,
-                num_proc=args.dataset_num_proc if hasattr(args, 'dataset_num_proc') else 1,
-                use_hf=args.use_hf if hasattr(args, 'use_hf') else False
-            )
-        except Exception as e:
-            logger.error(f'[CHORD] Failed to load dataset {dataset_string}: {e}')
-            raise
+        chord_dataset, _ = load_dataset(
+            dataset_string,
+            strict=False,
+            num_proc=getattr(args, 'dataset_num_proc', 1),
+            use_hf=getattr(args, 'use_hf', False)
+        )
         
         if chord_dataset is None or len(chord_dataset) == 0:
             raise ValueError(f'[CHORD] Dataset {dataset_string} is empty or failed to load')
@@ -238,17 +233,32 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     
     def _get_next_chord_batch(self) -> Dict[str, Any]:
         """Get next batch from CHORD SFT dataloader"""
-        if self.chord_dataloader is None:
-            return None
-        
         try:
             batch = next(self.chord_data_iterator)
         except StopIteration:
-            # データローダーをリセット
+            # エポック終了時はイテレータをリセット
             self.chord_data_iterator = iter(self.chord_dataloader)
             batch = next(self.chord_data_iterator)
         
-        return to_device(batch, self.device)
+        # バッチがリストの場合、辞書形式に変換
+        if isinstance(batch, list):
+            # リストの各要素が辞書の場合（HuggingFace Dataset形式）
+            if len(batch) > 0 and isinstance(batch[0], dict):
+                # 辞書のリストを、リストの辞書に変換
+                # [{k1: v1, k2: v2}, {k1: v3, k2: v4}] 
+                # → {k1: [v1, v3], k2: [v2, v4]}
+                keys = batch[0].keys()
+                batch = {k: [item[k] for item in batch] for k in keys}
+        
+        # テンソルに変換してデバイスに移動
+        if isinstance(batch, dict):
+            batch = {
+                k: torch.tensor(v).to(self.device) if not isinstance(v, torch.Tensor) 
+                else v.to(self.device)
+                for k, v in batch.items()
+            }
+        
+        return batch
     
     def _compute_phi_weights(
         self,
