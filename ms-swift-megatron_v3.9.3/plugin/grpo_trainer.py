@@ -68,7 +68,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             self._train_valid_test_dataset_provider.is_distributed = True
         # ==================== CHORDデータセット設定（追加）====================
         if self.chord_enabled:
-            self._setup_chord_dataloader(data_collator)
+            self._setup_chord_dataloader()
         # ====================================================================
         super().train(train_dataset, val_dataset, data_collator)
 
@@ -156,22 +156,17 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 f'phi_type={self.chord_phi_type}, sft_dataset={self.chord_sft_dataset}')
     
     
-    def _setup_chord_dataloader(self, data_collator):
-        """Setup CHORD SFT dataloader"""
-        from swift.llm import load_dataset
+    def _setup_chord_dataloader(self):
+        """Setup CHORD SFT dataloader using EncodePreprocessor"""
+        from swift.llm import load_dataset, EncodePreprocessor
         from torch.utils.data import DataLoader
         
         args = self.args
-        
-        # ms-swiftの正しいデータセットロード方法
         dataset_string = self.chord_sft_dataset
-        
-        # splitが指定されていない場合はデフォルトでtrainを追加
-        # ms-swiftではsplitはデータセット名の後に:で指定する
-        # 例: 'dataset_id:train', 'dataset_id:all', 'dataset_id:validation'
         
         logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
         
+        # 1. データセットをロード
         chord_dataset, _ = load_dataset(
             dataset_string,
             strict=False,
@@ -180,18 +175,27 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         )
         
         if chord_dataset is None or len(chord_dataset) == 0:
-            raise ValueError(f'[CHORD] Dataset {dataset_string} is empty or failed to load')
+            raise ValueError(f'[CHORD] Dataset {dataset_string} is empty')
         
-        logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples from SFT dataset')
+        logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples')
         
-        # DataLoaderを作成
+        # 2. ★ 重要: EncodePreprocessorでエンコード
+        encode_preprocessor = EncodePreprocessor(template=self.template)
+        chord_dataset = encode_preprocessor(
+            chord_dataset, 
+            num_proc=getattr(args, 'dataset_num_proc', 1)
+        )
+        
+        logger.info(f'[CHORD] Encoded {len(chord_dataset)} samples')
+        
+        # 3. DataLoaderを作成（template.data_collatorを使用）
         self.chord_dataloader = DataLoader(
             chord_dataset,
             batch_size=self.chord_sft_per_device_train_batch_size,
             shuffle=True,
-            collate_fn=data_collator,
+            collate_fn=self.template.data_collator,  # ★ templateのcollatorを使用
             drop_last=True,
-            num_workers=0,  # Megatronでは0が安全
+            num_workers=0,
         )
         
         self.chord_data_iterator = iter(self.chord_dataloader)
