@@ -158,49 +158,70 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     
     
     def _setup_chord_dataloader(self):
-        """Setup CHORD SFT dataloader using EncodePreprocessor"""
+        """Setup CHORD SFT dataloader using EncodePreprocessor (分散環境対応版)"""
         from swift.llm import load_dataset, EncodePreprocessor
-        from torch.utils.data import DataLoader
+        from torch.utils.data import DataLoader, DistributedSampler
+        import torch.distributed as dist
         
         args = self.args
         dataset_string = self.chord_sft_dataset
         
-        logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
+        # ★ 分散環境での同期: ランク情報を取得
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
         
-        # 1. データセットをロード
+        if rank == 0:
+            logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
+        
+        # 1. データセットをロード（全ランクで実行）
         chord_dataset, _ = load_dataset(
             dataset_string,
             strict=False,
-            num_proc=getattr(args, 'dataset_num_proc', 1),
+            num_proc=1,  # ★ 分散環境では1に固定（競合回避）
             use_hf=getattr(args, 'use_hf', False)
         )
         
         if chord_dataset is None or len(chord_dataset) == 0:
             raise ValueError(f'[CHORD] Dataset {dataset_string} is empty')
         
-        logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples')
+        if rank == 0:
+            logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples')
         
         # 2. ★ 重要: EncodePreprocessorでエンコード
         encode_preprocessor = EncodePreprocessor(template=self.template)
         chord_dataset = encode_preprocessor(
             chord_dataset, 
-            num_proc=getattr(args, 'dataset_num_proc', 1)
+            num_proc=1  # ★ 分散環境では1に固定
         )
         
-        logger.info(f'[CHORD] Encoded {len(chord_dataset)} samples')
+        if rank == 0:
+            logger.info(f'[CHORD] Encoded {len(chord_dataset)} samples')
         
-        # 3. DataLoaderを作成（template.data_collatorを使用）
+        # 3. ★ 分散サンプラーを使用（全ランクで同じシード → 同期）
+        self.chord_sampler = DistributedSampler(
+            chord_dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=True,
+            seed=42,  # ★ 固定シードで全ランク同期
+            drop_last=True,
+        )
+        
+        # 4. DataLoaderを作成（shuffleではなくsamplerを使用）
         self.chord_dataloader = DataLoader(
             chord_dataset,
             batch_size=self.chord_sft_per_device_train_batch_size,
-            shuffle=True,
-            collate_fn=self.template.data_collator,  # ★ templateのcollatorを使用
+            sampler=self.chord_sampler,  # ★ shuffle=Trueの代わり
+            collate_fn=self.template.data_collator,
             drop_last=True,
             num_workers=0,
         )
         
         self.chord_data_iterator = iter(self.chord_dataloader)
-        logger.info(f'[CHORD] Created dataloader with batch_size={self.chord_sft_per_device_train_batch_size}')
+        self._chord_epoch = 0
+        
+        if rank == 0:
+            logger.info(f'[CHORD] Created dataloader with batch_size={self.chord_sft_per_device_train_batch_size}')
     
     def _get_chord_mu(self) -> float:
         """
@@ -240,31 +261,41 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
     
     def _get_next_chord_batch(self) -> Dict[str, Any]:
-        """Get next batch from CHORD SFT dataloader"""
+        """Get next batch from CHORD SFT dataloader (分散環境対応版)"""
         try:
             batch = next(self.chord_data_iterator)
         except StopIteration:
-            # エポック終了時はイテレータをリセット
+            # エポック終了時はサンプラーのエポックを更新してイテレータをリセット
+            if hasattr(self, 'chord_sampler') and self.chord_sampler is not None:
+                self._chord_epoch = getattr(self, '_chord_epoch', 0) + 1
+                self.chord_sampler.set_epoch(self._chord_epoch)  # ★ シャッフル順序を変更
             self.chord_data_iterator = iter(self.chord_dataloader)
             batch = next(self.chord_data_iterator)
         
         # バッチがリストの場合、辞書形式に変換
         if isinstance(batch, list):
-            # リストの各要素が辞書の場合（HuggingFace Dataset形式）
             if len(batch) > 0 and isinstance(batch[0], dict):
-                # 辞書のリストを、リストの辞書に変換
-                # [{k1: v1, k2: v2}, {k1: v3, k2: v4}] 
-                # → {k1: [v1, v3], k2: [v2, v4]}
                 keys = batch[0].keys()
                 batch = {k: [item[k] for item in batch] for k in keys}
         
-        # テンソルに変換してデバイスに移動
+        # テンソルに変換してデバイスに移動（エラーハンドリング追加）
         if isinstance(batch, dict):
-            batch = {
-                k: torch.tensor(v).to(self.device) if not isinstance(v, torch.Tensor) 
-                else v.to(self.device)
-                for k, v in batch.items()
-            }
+            processed_batch = {}
+            for k, v in batch.items():
+                if v is None:
+                    continue
+                try:
+                    if isinstance(v, torch.Tensor):
+                        processed_batch[k] = v.to(self.device)
+                    elif isinstance(v, (list, tuple)):
+                        processed_batch[k] = torch.tensor(v).to(self.device)
+                    else:
+                        processed_batch[k] = v
+                except (ValueError, TypeError, RuntimeError) as e:
+                    # テンソル変換できない場合はスキップ
+                    logger.debug(f'[CHORD] Could not convert {k} to tensor: {e}')
+                    processed_batch[k] = v
+            batch = processed_batch
         
         return batch
     
@@ -315,50 +346,61 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         labels = chord_batch.get('labels')
         if labels is None:
+            logger.warning('[CHORD] labels not found in chord_batch')
             return torch.tensor(0.0, device=self.device, requires_grad=True)
         
         packed_seq_params = chord_batch.get('packed_seq_params')
         num_samples = chord_batch.get('num_samples', 1)
         
-        # ★ 重要: Megatronモデル用のフォワードパス
-        # model(**inputs)ではなく、forward_step_helperを使用
-        MODEL_INPUT_KEYS = {
-            'input_ids', 
-            'attention_mask', 
-            'position_ids',
-            'text_position_ids',
-        }
-        
-        inputs = {
-            k: v for k, v in chord_batch.items() 
-            if k in MODEL_INPUT_KEYS and v is not None
-        }
-        
-        with torch.enable_grad():
-            # ★ Megatron用のフォワード呼び出し
-            output_tensor = forward_step_helper(model, chord_batch)
-        
-        # ★ padding-freeモードでの損失計算
-        if packed_seq_params is not None:
-            # Padding-free mode: output_tensor is [total_tokens, vocab_size]
-            per_token_logps = self.get_logps(
-                output_tensor, labels, packed_seq_params, 
-                num_samples, per_token=True
-            )
-            completion_mask = (labels != -100).float()
+        try:
+            with torch.enable_grad():
+                # ★ Megatron用のフォワード呼び出し
+                output_tensor = forward_step_helper(model, chord_batch)
             
-            # CHORD-φの重み適用
-            if self.chord_enable_phi_function:
-                # 公式のφ定義: φ = p_t * (1 - p_t)
-                probs = torch.exp(per_token_logps)
-                phi_weights = probs * (1 - probs)
-                sft_loss = -(per_token_logps * phi_weights * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+            # ★ padding-freeモードでの損失計算
+            if packed_seq_params is not None:
+                # Padding-free mode: output_tensor is [total_tokens, vocab_size]
+                per_token_logps = self.get_logps(
+                    output_tensor, labels, packed_seq_params, 
+                    num_samples, per_token=True
+                )
+                completion_mask = (labels != -100).float()
+                
+                # CHORD-φの重み適用
+                if self.chord_enable_phi_function:
+                    # 公式のφ定義: φ = p_t * (1 - p_t)
+                    probs = torch.exp(per_token_logps.clamp(max=0))  # clampでオーバーフロー防止
+                    phi_weights = probs * (1 - probs)
+                    phi_weights = phi_weights / (phi_weights.mean() + 1e-8)  # 正規化
+                    sft_loss = -(per_token_logps * phi_weights * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+                else:
+                    sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
             else:
-                sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
-        else:
-            # Non-padding-free mode（通常は使用しない）
-            # この分岐はMegatronでは通常到達しないはず
-            logger.warning('[CHORD] Non-padding-free mode detected, this may cause issues')
+                # Non-padding-free mode: 簡易的なCross Entropy計算
+                logger.debug('[CHORD] packed_seq_params not found, using simple cross entropy')
+                if output_tensor.dim() == 2:
+                    # [total_tokens, vocab_size]
+                    logits = output_tensor
+                    labels_flat = labels.view(-1)
+                elif output_tensor.dim() == 3:
+                    # [batch, seq, vocab]
+                    logits = output_tensor.view(-1, output_tensor.size(-1))
+                    labels_flat = labels.view(-1)
+                else:
+                    logger.warning(f'[CHORD] Unexpected output_tensor dim: {output_tensor.dim()}')
+                    return torch.tensor(0.0, device=self.device, requires_grad=True)
+                
+                valid_mask = labels_flat != -100
+                if valid_mask.sum() > 0:
+                    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='mean')
+                    sft_loss = loss_fct(logits, labels_flat)
+                else:
+                    sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+        
+        except Exception as e:
+            logger.warning(f'[CHORD] Forward pass failed: {e}')
+            import traceback
+            traceback.print_exc()
             sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
         
         return sft_loss
@@ -1498,28 +1540,28 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             mu = self._get_chord_mu()
             
             if mu > 0 and chord_batch is not None:
-                # ★ 既存のモデルを使ってフォワードを再計算するのではなく、
-                # forward_step内で既に計算されたoutput_tensorを活用
-                with profiling_context(self, 'chord_sft_loss'):
-                    # ★ chord_batch用の別のフォワードパスが必要な場合は、
-                    # model_forward関数を使用
-                    chord_data = self.model_forward(
-                        self.unwrapped_models[0], 
-                        iter([chord_batch]), 
-                        no_grad=False, 
-                        per_token=True
-                    )
-                    sft_loss = self._compute_chord_sft_loss(chord_data)
-                
-                # CHORD統合損失
-                grpo_loss = loss
-                loss = (1 - mu) * grpo_loss + mu * sft_loss
-                
-                # メトリクス記録
-                mode = 'train' if self.unwrapped_models[0].training else 'eval'
-                reporting_metric['chord/mu'] = torch.tensor(mu, device=loss.device)
-                reporting_metric['chord/grpo_loss'] = grpo_loss.detach()
-                reporting_metric['chord/sft_loss'] = sft_loss.detach()
+                try:
+                    with profiling_context(self, 'chord_sft_loss'):
+                        # ★ 修正: 直接_compute_chord_sft_lossを呼び出す
+                        # model_forwardは使わない（get_batchとの互換性問題を回避）
+                        sft_loss = self._compute_chord_sft_loss(
+                            self.unwrapped_models[0],  # ← model引数
+                            chord_batch                 # ← chord_batch引数
+                        )
+                    
+                    # CHORD統合損失
+                    grpo_loss = loss
+                    loss = (1 - mu) * grpo_loss + mu * sft_loss
+                    
+                    # メトリクス記録
+                    mode = 'train' if self.unwrapped_models[0].training else 'eval'
+                    reporting_metric['chord/mu'] = torch.tensor(mu, device=loss.device)
+                    reporting_metric['chord/grpo_loss'] = grpo_loss.detach()
+                    reporting_metric['chord/sft_loss'] = sft_loss.detach()
+                except Exception as e:
+                    logger.warning(f'[CHORD] SFT loss computation failed: {e}')
+                    import traceback
+                    traceback.print_exc()
         # ================================================================
 
         # log_completions
