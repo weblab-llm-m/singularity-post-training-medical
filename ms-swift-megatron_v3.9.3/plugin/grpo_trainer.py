@@ -147,14 +147,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     # CHORD, https://arxiv.org/abs/2508.11408
     # ==================== CHORD（追加）====================    
     def _init_chord(self):
-        if self.chord_sft_dataset is not None:
-            # CHORDが有効な場合の検証
-            if self.chord_mu_peak < 0 or self.chord_mu_peak > 1:
-                raise ValueError(f'chord_mu_peak must be in [0, 1], got {self.chord_mu_peak}')
-            if self.chord_mu_valley < 0 or self.chord_mu_valley > self.chord_mu_peak:
-                raise ValueError(f'chord_mu_valley must be in [0, chord_mu_peak], got {self.chord_mu_valley}')
-            logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
-                    f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}')
+        """Initialize CHORD-specific components"""
+        if not self.chord_enabled:
+            logger.info('CHORD is disabled (chord_sft_dataset not specified)')
+            return
+        
+        logger.info(f'CHORD enabled: mu={self.chord_mu}, mu_type={self.chord_mu_type}, '
+                f'phi_type={self.chord_phi_type}, sft_dataset={self.chord_sft_dataset}')
     
     
     def _setup_chord_dataloader(self):
