@@ -225,14 +225,14 @@ class RLHFMegatronArgumentsMixin:
         
         # ==================== CHORD初期化（ここに追加）====================
         def _init_chord():
-        if self.chord_sft_dataset is not None:
-            # CHORDが有効な場合の検証
-            if self.chord_mu_peak < 0 or self.chord_mu_peak > 1:
-                raise ValueError(f'chord_mu_peak must be in [0, 1], got {self.chord_mu_peak}')
-            if self.chord_mu_valley < 0 or self.chord_mu_valley > self.chord_mu_peak:
-                raise ValueError(f'chord_mu_valley must be in [0, chord_mu_peak], got {self.chord_mu_valley}')
-            logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
-                    f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}')
+            if self.chord_sft_dataset is not None:
+                # CHORDが有効な場合の検証
+                if self.chord_mu_peak < 0 or self.chord_mu_peak > 1:
+                    raise ValueError(f'chord_mu_peak must be in [0, 1], got {self.chord_mu_peak}')
+                if self.chord_mu_valley < 0 or self.chord_mu_valley > self.chord_mu_peak:
+                    raise ValueError(f'chord_mu_valley must be in [0, chord_mu_peak], got {self.chord_mu_valley}')
+                logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
+                        f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}')
         # =================================================================
 
         _check_not_supported()
