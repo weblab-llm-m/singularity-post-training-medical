@@ -314,24 +314,46 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_loss: Scalar SFT loss
         """
         if chord_batch is None:
-            return torch.tensor(0.0, device=self.device)
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
+        # ★ 修正: モデルが受け付けるフィールドのみを明示的に指定（ホワイトリスト方式）
+        MODEL_INPUT_KEYS = {
+            'input_ids', 
+            'attention_mask', 
+            'position_ids',
+            'text_position_ids',  # padding-free mode
+        }
+        
+        inputs = {
+            k: v for k, v in chord_batch.items() 
+            if k in MODEL_INPUT_KEYS and v is not None
+        }
+        
+        # 必須フィールドの確認
+        if 'input_ids' not in inputs:
+            logger.warning('[CHORD] input_ids not found in chord_batch, skipping SFT loss')
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
+        # labelsを取得
+        labels = chord_batch.get('labels')
+        if labels is None:
+            logger.warning('[CHORD] labels not found in chord_batch, skipping SFT loss')
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
+        # メタデータを取得
+        packed_seq_params = chord_batch.get('packed_seq_params')
+        num_samples = chord_batch.get('num_samples', 1)
         
         # フォワードパス
-        inputs = {k: v for k, v in chord_batch.items() 
-                if k not in ['labels', 'loss_scale']}
-        
         with torch.enable_grad():
             output_tensor = model(**inputs)
-        
-        labels = chord_batch['labels']
-        packed_seq_params = chord_batch.get('packed_seq_params')
         
         # クロスエントロピー損失を計算
         if packed_seq_params is not None:
             # Padding-free mode
             per_token_logps = self.get_logps(
                 output_tensor, labels, packed_seq_params, 
-                packed_seq_params.num_samples, per_token=True
+                num_samples, per_token=True
             )
             completion_mask = labels != -100
             
@@ -342,8 +364,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
         else:
-            # 標準モード
-            sft_loss = -(per_token_logps * (labels != -100)).sum() / (labels != -100).sum().clamp(min=1.0)
+            # 標準モード（非padding-free）
+            logits = output_tensor
+            if logits.dim() == 3:  # [batch, seq, vocab]
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+                loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='mean')
+                sft_loss = loss_fct(
+                    shift_logits.view(-1, shift_logits.size(-1)), 
+                    shift_labels.view(-1)
+                )
+            else:
+                logger.warning(f'[CHORD] Unexpected logits shape: {logits.shape}')
+                sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
         
         return sft_loss
     # ================================================================

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo_learn
+#SBATCH --job-name=chord_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
 #SBATCH --nodelist=osk-gpu[28-35]
@@ -237,7 +237,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs'
+          --wandb_exp_name 'chord_grpo_reward_chinese_1.0_5epochs'
     "
 
 # --log_completions trueでWandbで推論結果を出力させる
