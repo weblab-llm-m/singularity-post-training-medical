@@ -99,11 +99,15 @@ class RLHFMegatronArgumentsMixin:
     # ==================== CHORD パラメータ（ここに追加）====================
     chord_sft_dataset: Optional[str] = None  # SFTデータセット
     chord_sft_per_device_train_batch_size: int = 1  # SFTバッチサイズ
-    chord_mu_type: Literal['constant', 'cosine', 'linear'] = 'cosine'  # μのスケジューリング方式
-    chord_mu: float = 0.1  # μの初期値
-    chord_mu_min: float = 0.0  # μの最小値
-    chord_phi_type: Literal['none', 'logprob', 'advantage'] = 'none'  # φの方式
-    chord_phi_tau: float = 1.0  # φのtemperatureパラメータ
+
+    # CHORD-μ パラメータ（公式と同じ）
+    chord_mu_peak: float = 0.1  # μの最大値
+    chord_mu_valley: float = 0.0  # μの最小値（減衰後）
+    chord_mu_warmup_steps: int = 0  # ウォームアップステップ数
+    chord_mu_decay_steps: Optional[int] = None  # 減衰ステップ数（Noneの場合はtrain_itersを使用）
+
+    # CHORD-φ パラメータ（公式と同じ）
+    chord_enable_phi_function: bool = False  # φ関数を有効化
     # =====================================================================
 
     # ───────────────────────────  Not Supported Yet  ───────────────────────────

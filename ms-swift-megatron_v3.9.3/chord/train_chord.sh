@@ -167,11 +167,13 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --chord_sft_dataset AI-ModelScope/alpaca-gpt4-data-zh \
+          --chord_sft_dataset llm-wizard/alpaca-gpt4-data-zh \
           --chord_sft_per_device_train_batch_size 2 \
-          --chord_mu 0.1 \
-          --chord_mu_type cosine \
-          --chord_mu_min 0.01 \
+          --chord_mu_peak 0.1 \
+          --chord_mu_valley 0.01 \
+          --chord_mu_warmup_steps 0 \
+          --chord_mu_decay_steps 500 \
+          --chord_enable_phi_function false \
           --beta 0.1 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \

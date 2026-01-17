@@ -203,37 +203,27 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     
     def _get_chord_mu(self) -> float:
         """
-        Calculate current μ value based on training progress.
-        
-        μ controls the balance between GRPO loss and SFT loss:
-        L_CHORD = (1 - μ) * L_GRPO + μ * L_SFT
+        公式のμスケジューリング実装に合わせる
         """
         if not self.chord_enabled:
             return 0.0
         
-        # 訓練進捗を計算
-        args = get_args()
         current_step = self._step
-        total_steps = args.train_iters
+        warmup_steps = self.chord_mu_warmup_steps
+        decay_steps = self.chord_mu_decay_steps or get_args().train_iters
         
-        if total_steps is None or total_steps <= 0:
-            return self.chord_mu
+        mu_peak = self.chord_mu_peak
+        mu_valley = self.chord_mu_valley
         
-        progress = min(current_step / total_steps, 1.0)
-        mu = self.chord_mu
-        mu_min = self.chord_mu_min
+        # Warmup phase
+        if current_step < warmup_steps:
+            return mu_peak * (current_step / max(warmup_steps, 1))
         
-        if self.chord_mu_type == 'constant':
-            return mu
-        elif self.chord_mu_type == 'cosine':
-            # コサインスケジューリング：μからmu_minへ減衰
-            import math
-            return mu_min + (mu - mu_min) * (1 + math.cos(math.pi * progress)) / 2
-        elif self.chord_mu_type == 'linear':
-            # 線形減衰
-            return mu - (mu - mu_min) * progress
-        else:
-            return mu
+        # Decay phase
+        decay_progress = (current_step - warmup_steps) / max(decay_steps - warmup_steps, 1)
+        decay_progress = min(decay_progress, 1.0)
+        
+        return mu_peak - (mu_peak - mu_valley) * decay_progress
     
     def _get_next_chord_batch(self) -> Dict[str, Any]:
         """Get next batch from CHORD SFT dataloader"""
@@ -304,24 +294,25 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         chord_batch: Dict[str, Any],
     ) -> torch.Tensor:
         """
-        Compute SFT loss for CHORD.
-        
-        Args:
-            model: The model to compute loss with
-            chord_batch: Batch of SFT data
-            
-        Returns:
-            sft_loss: Scalar SFT loss
+        Megatron padding-freeモードに対応したSFT損失計算
         """
         if chord_batch is None:
             return torch.tensor(0.0, device=self.device, requires_grad=True)
         
-        # ★ 修正: モデルが受け付けるフィールドのみを明示的に指定（ホワイトリスト方式）
+        labels = chord_batch.get('labels')
+        if labels is None:
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
+        packed_seq_params = chord_batch.get('packed_seq_params')
+        num_samples = chord_batch.get('num_samples', 1)
+        
+        # ★ 重要: Megatronモデル用のフォワードパス
+        # model(**inputs)ではなく、forward_step_helperを使用
         MODEL_INPUT_KEYS = {
             'input_ids', 
             'attention_mask', 
             'position_ids',
-            'text_position_ids',  # padding-free mode
+            'text_position_ids',
         }
         
         inputs = {
@@ -329,54 +320,32 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             if k in MODEL_INPUT_KEYS and v is not None
         }
         
-        # 必須フィールドの確認
-        if 'input_ids' not in inputs:
-            logger.warning('[CHORD] input_ids not found in chord_batch, skipping SFT loss')
-            return torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        # labelsを取得
-        labels = chord_batch.get('labels')
-        if labels is None:
-            logger.warning('[CHORD] labels not found in chord_batch, skipping SFT loss')
-            return torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        # メタデータを取得
-        packed_seq_params = chord_batch.get('packed_seq_params')
-        num_samples = chord_batch.get('num_samples', 1)
-        
-        # フォワードパス
         with torch.enable_grad():
-            output_tensor = model(**inputs)
+            # ★ Megatron用のフォワード呼び出し
+            output_tensor = forward_step_helper(model, chord_batch)
         
-        # クロスエントロピー損失を計算
+        # ★ padding-freeモードでの損失計算
         if packed_seq_params is not None:
-            # Padding-free mode
+            # Padding-free mode: output_tensor is [total_tokens, vocab_size]
             per_token_logps = self.get_logps(
                 output_tensor, labels, packed_seq_params, 
                 num_samples, per_token=True
             )
-            completion_mask = labels != -100
+            completion_mask = (labels != -100).float()
             
             # CHORD-φの重み適用
-            if self.chord_phi_type != 'none':
-                phi_weights = self._compute_phi_weights(per_token_logps, completion_mask)
+            if self.chord_enable_phi_function:
+                # 公式のφ定義: φ = p_t * (1 - p_t)
+                probs = torch.exp(per_token_logps)
+                phi_weights = probs * (1 - probs)
                 sft_loss = -(per_token_logps * phi_weights * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
             else:
                 sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
         else:
-            # 標準モード（非padding-free）
-            logits = output_tensor
-            if logits.dim() == 3:  # [batch, seq, vocab]
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-                loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='mean')
-                sft_loss = loss_fct(
-                    shift_logits.view(-1, shift_logits.size(-1)), 
-                    shift_labels.view(-1)
-                )
-            else:
-                logger.warning(f'[CHORD] Unexpected logits shape: {logits.shape}')
-                sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+            # Non-padding-free mode（通常は使用しない）
+            # この分岐はMegatronでは通常到達しないはず
+            logger.warning('[CHORD] Non-padding-free mode detected, this may cause issues')
+            sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
         
         return sft_loss
     # ================================================================
@@ -1515,24 +1484,25 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             mu = self._get_chord_mu()
             
             if mu > 0 and chord_batch is not None:
-                # SFT損失を計算
+                # ★ 既存のモデルを使ってフォワードを再計算するのではなく、
+                # forward_step内で既に計算されたoutput_tensorを活用
                 with profiling_context(self, 'chord_sft_loss'):
-                    sft_loss = self._compute_chord_sft_loss(
+                    # ★ chord_batch用の別のフォワードパスが必要な場合は、
+                    # model_forward関数を使用
+                    chord_data = self.model_forward(
                         self.unwrapped_models[0], 
-                        chord_batch
+                        iter([chord_batch]), 
+                        no_grad=False, 
+                        per_token=True
                     )
+                    sft_loss = self._compute_chord_sft_loss_from_logps(chord_data)
                 
-                # CHORD統合損失: L = (1 - μ) * L_GRPO + μ * L_SFT
+                # CHORD統合損失
                 grpo_loss = loss
                 loss = (1 - mu) * grpo_loss + mu * sft_loss
                 
-                # メトリクスを記録
+                # メトリクス記録
                 mode = 'train' if self.unwrapped_models[0].training else 'eval'
-                self._metrics[mode]['chord/mu'].append(mu)
-                self._metrics[mode]['chord/grpo_loss'].append(grpo_loss.detach())
-                self._metrics[mode]['chord/sft_loss'].append(sft_loss.detach())
-                
-                # reporting_metricに追加
                 reporting_metric['chord/mu'] = torch.tensor(mu, device=loss.device)
                 reporting_metric['chord/grpo_loss'] = grpo_loss.detach()
                 reporting_metric['chord/sft_loss'] = sft_loss.detach()
