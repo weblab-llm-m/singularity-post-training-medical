@@ -152,8 +152,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             logger.info('CHORD is disabled (chord_sft_dataset not specified)')
             return
         
-        logger.info(f'CHORD enabled: mu={self.chord_mu}, mu_type={self.chord_mu_type}, '
-                f'phi_type={self.chord_phi_type}, sft_dataset={self.chord_sft_dataset}')
+        logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
+            f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}, '
+            f'phi_function={self.chord_enable_phi_function}, sft_dataset={self.chord_sft_dataset}')
     
     
     def _setup_chord_dataloader(self):
