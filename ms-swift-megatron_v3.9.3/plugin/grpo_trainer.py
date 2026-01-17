@@ -129,11 +129,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         self.chord_enabled = args.chord_sft_dataset is not None
         self.chord_sft_dataset = args.chord_sft_dataset
         self.chord_sft_per_device_train_batch_size = args.chord_sft_per_device_train_batch_size
-        self.chord_mu = args.chord_mu
-        self.chord_mu_min = args.chord_mu_min
-        self.chord_mu_type = args.chord_mu_type
-        self.chord_phi_type = args.chord_phi_type
-        self.chord_phi_tau = args.chord_phi_tau
+        self.chord_mu_peak = args.chord_mu_peak
+        self.chord_mu_valley = args.chord_mu_valley
+        self.chord_mu_warmup_steps = args.chord_mu_warmup_steps
+        self.chord_mu_decay_steps = args.chord_mu_decay_steps
+        self.chord_enable_phi_function = args.chord_enable_phi_function
         
         # CHORDデータローダー（後で初期化）
         self.chord_dataloader = None
@@ -145,15 +145,16 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         self._rollout_group = None  # Will be lazily initialized
 
     # CHORD, https://arxiv.org/abs/2508.11408
-    # ==================== CHORD（追加）====================
+    # ==================== CHORD（追加）====================    
     def _init_chord(self):
-        """Initialize CHORD-specific components"""
-        if not self.chord_enabled:
-            logger.info('CHORD is disabled (chord_sft_dataset not specified)')
-            return
-        
-        logger.info(f'CHORD enabled: mu={self.chord_mu}, mu_type={self.chord_mu_type}, '
-                f'phi_type={self.chord_phi_type}, sft_dataset={self.chord_sft_dataset}')
+        if self.chord_sft_dataset is not None:
+            # CHORDが有効な場合の検証
+            if self.chord_mu_peak < 0 or self.chord_mu_peak > 1:
+                raise ValueError(f'chord_mu_peak must be in [0, 1], got {self.chord_mu_peak}')
+            if self.chord_mu_valley < 0 or self.chord_mu_valley > self.chord_mu_peak:
+                raise ValueError(f'chord_mu_valley must be in [0, chord_mu_peak], got {self.chord_mu_valley}')
+            logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
+                    f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}')
     
     
     def _setup_chord_dataloader(self):
@@ -203,27 +204,40 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     
     def _get_chord_mu(self) -> float:
         """
-        公式のμスケジューリング実装に合わせる
+        公式のμスケジューリング実装
+        Warmup → Peak → Decay to Valley
         """
         if not self.chord_enabled:
             return 0.0
         
         current_step = self._step
         warmup_steps = self.chord_mu_warmup_steps
-        decay_steps = self.chord_mu_decay_steps or get_args().train_iters
+        
+        # decay_stepsがNoneの場合はtrain_itersを使用
+        args = get_args()
+        decay_steps = self.chord_mu_decay_steps
+        if decay_steps is None:
+            decay_steps = args.train_iters if args.train_iters else 1000
         
         mu_peak = self.chord_mu_peak
         mu_valley = self.chord_mu_valley
         
-        # Warmup phase
+        # Warmup phase: 0 → mu_peak
         if current_step < warmup_steps:
-            return mu_peak * (current_step / max(warmup_steps, 1))
+            if warmup_steps > 0:
+                return mu_peak * (current_step / warmup_steps)
+            return mu_peak
         
-        # Decay phase
-        decay_progress = (current_step - warmup_steps) / max(decay_steps - warmup_steps, 1)
-        decay_progress = min(decay_progress, 1.0)
+        # Decay phase: mu_peak → mu_valley
+        decay_start = warmup_steps
+        decay_end = warmup_steps + decay_steps
         
+        if current_step >= decay_end:
+            return mu_valley
+        
+        decay_progress = (current_step - decay_start) / max(decay_steps, 1)
         return mu_peak - (mu_peak - mu_valley) * decay_progress
+
     
     def _get_next_chord_batch(self) -> Dict[str, Any]:
         """Get next batch from CHORD SFT dataloader"""

@@ -2,7 +2,7 @@
 #SBATCH --job-name=chord_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[28-35]
+#SBATCH --nodelist=osk-gpu[61-68]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
