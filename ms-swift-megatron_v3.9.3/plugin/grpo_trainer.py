@@ -1509,7 +1509,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                         no_grad=False, 
                         per_token=True
                     )
-                    sft_loss = self._compute_chord_sft_loss_from_logps(chord_data)
+                    sft_loss = self._compute_chord_sft_loss(chord_data)
                 
                 # CHORD統合損失
                 grpo_loss = loss
