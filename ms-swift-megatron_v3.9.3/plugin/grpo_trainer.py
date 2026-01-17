@@ -157,24 +157,37 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     
     def _setup_chord_dataloader(self, data_collator):
         """Setup CHORD SFT dataloader"""
-        if not self.chord_enabled:
-            return
-        
         from swift.llm import load_dataset
         from torch.utils.data import DataLoader
         
-        # SFTデータセットをロード
-        chord_dataset = load_dataset(
-            self.chord_sft_dataset,
-            split='train',
-            use_hf=self.args.use_hf
-        )
+        args = self.args
         
-        # テンプレートでエンコード
-        def encode_fn(examples):
-            return self.template.encode(examples)
+        # ms-swiftの正しいデータセットロード方法
+        dataset_string = self.chord_sft_dataset
         
-        chord_dataset = chord_dataset.map(encode_fn, batched=False)
+        # splitが指定されていない場合はデフォルトでtrainを追加
+        # ms-swiftではsplitはデータセット名の後に:で指定する
+        # 例: 'dataset_id:train', 'dataset_id:all', 'dataset_id:validation'
+        
+        logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
+        
+        try:
+            # load_datasetはリストを受け取り、タプル(train_dataset, val_dataset)を返す
+            # または単一の文字列を渡すとタプル(dataset, None)を返す
+            chord_dataset, _ = load_dataset(
+                dataset_string,
+                strict=False,
+                num_proc=args.dataset_num_proc if hasattr(args, 'dataset_num_proc') else 1,
+                use_hf=args.use_hf if hasattr(args, 'use_hf') else False
+            )
+        except Exception as e:
+            logger.error(f'[CHORD] Failed to load dataset {dataset_string}: {e}')
+            raise
+        
+        if chord_dataset is None or len(chord_dataset) == 0:
+            raise ValueError(f'[CHORD] Dataset {dataset_string} is empty or failed to load')
+        
+        logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples from SFT dataset')
         
         # DataLoaderを作成
         self.chord_dataloader = DataLoader(
@@ -182,12 +195,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             batch_size=self.chord_sft_per_device_train_batch_size,
             shuffle=True,
             collate_fn=data_collator,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
             drop_last=True,
+            num_workers=0,  # Megatronでは0が安全
         )
+        
         self.chord_data_iterator = iter(self.chord_dataloader)
-        logger.info(f'CHORD SFT dataloader initialized with {len(chord_dataset)} samples')
+        logger.info(f'[CHORD] Created dataloader with batch_size={self.chord_sft_per_device_train_batch_size}')
     
     def _get_chord_mu(self) -> float:
         """
