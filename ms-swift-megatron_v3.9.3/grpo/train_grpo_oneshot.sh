@@ -14,6 +14,8 @@
 set -xeuo pipefail
 source $HOME/singularity-post-training-medical/.env
 
+# 学習の重みなどを保存しない＝途中で再学習することはできない（OneーShot）
+
 # ===== 共通 =====
 # Swift の作業ディレクトリ（v2）
 SWIFT_WORKDIR=${SWIFT_WORKDIR:-$HOME/swift-RL}

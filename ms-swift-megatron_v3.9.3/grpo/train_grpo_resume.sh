@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=grpo_learn
+#SBATCH --job-name=resume_grpo_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[28-35]
+#SBATCH --nodelist=osk-gpu[61-68]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -34,8 +34,9 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 
 # ！！！！！！！！！！！途中再開のモデルをLoadする！！！！！！！！！！！！！！！
-CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v5-20251220-135857/checkpoint-XXX}
-
+CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v11-20260117-123728/checkpoint-50}
+# W&Bの既存run_id（確認して設定）
+WANDB_RUN_ID=${WANDB_RUN_ID:-"xxxxxxxx"}  # 実際のrun_idに置き換え(Wandbの途中からログを再開する)
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -145,6 +146,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_DIR=${OUTPUT_DIR} \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
+    --env WANDB_RESUME='allow' \
+    --env WANDB_RUN_ID="${WANDB_RUN_ID}" \
     "${SIF_FILE}" bash -lc "
       set -xeuo pipefail
       ulimit -l unlimited || true
@@ -170,7 +173,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --beta 0.1 \
+          --beta 0.05 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \
           --reward_weights 1.5 1.0 \

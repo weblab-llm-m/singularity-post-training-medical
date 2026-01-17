@@ -2,7 +2,7 @@
 #SBATCH --job-name=grpo_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[28-35]
+#SBATCH --nodelist=osk-gpu[61-68]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -167,7 +167,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --beta 0.1 \
+          --beta 0.05 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \
           --reward_weights 1.5 1.0 \
@@ -226,9 +226,10 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --attention_backend flash \
           --padding_free true \
           --save '${OUTPUT_DIR}' \
+          --save_megatron true
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs'
+          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs_resume'
     "
 
 # --log_completions trueでWandbで推論結果を出力させる
