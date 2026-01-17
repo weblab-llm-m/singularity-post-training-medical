@@ -222,6 +222,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
           --padding_free true \

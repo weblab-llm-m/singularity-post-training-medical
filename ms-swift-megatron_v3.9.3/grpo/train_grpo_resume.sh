@@ -33,6 +33,9 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 
+# ！！！！！！！！！！！途中再開のモデルをLoadする！！！！！！！！！！！！！！！
+CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v5-20251220-135857/checkpoint-XXX}
+
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -207,7 +210,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_grouped_gemm true \
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
-          --finetune \
+          --finetune false \
+          --load ${CHECK_POINT_PATH} \
           --global_batch_size 512 \
           --micro_batch_size 1 \
           --steps_per_generation 5 \
