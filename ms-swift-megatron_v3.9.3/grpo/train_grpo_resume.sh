@@ -34,8 +34,8 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 
 # ！！！！！！！！！！！途中再開のモデルをLoadする！！！！！！！！！！！！！！！
-CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v11-20260117-123728/checkpoint-50}
-# W&Bの既存run_id（確認して設定）
+CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v29-20260118-182028}
+# W&Bの既存run_id（確認して設定）：https://wandb.ai/llm-m_wandb-weblab/Ramen_GRPO_GSPO_TRY/runs/uc65jnkj?nw=nwuserroze23vpa40769のuc65jnkj
 WANDB_RUN_ID=${WANDB_RUN_ID:-"xxxxxxxx"}  # 実際のrun_idに置き換え(Wandbの途中からログを再開する)
 
 # 学習パラメータ
@@ -200,7 +200,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --pipeline_model_parallel_size 8 \
           --sequence_parallel true \
           --remove_unused_columns false \
-          --load_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -231,10 +230,10 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --log_completions false \
           --attention_backend flash \
           --padding_free true \
-          --save '${OUTPUT_DIR}' \
+          --save '${CHECK_POINT_PATH}' \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs'
+          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs_resume'
     "
 
 # --save_safetensors trueでsafetensorsで保存する

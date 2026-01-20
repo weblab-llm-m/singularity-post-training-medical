@@ -39,7 +39,15 @@ cd ~/swift-RL/containers
 singularity pull swift3.9.3.sif docker:modelscope-registry.us-west-1.cr.aliyuncs.com/modelscope-repo/modelscope:ubuntu22.04-cuda12.8.1-py311-torch2.8.0-vllm0.11.0-modelscope1.31.0-swift3.9.3
 ```
 
-# 3. ms-swiftを用意する
+# 3. Megatron-LM（training）を用意する。
+Megatron GRPO は **`megatron.training`** を import します。pip の `megatron-core` だけでは不足するため、**Megatron-LM リポジトリ（core_r0.14.0）** を clone してパスを通します。
+
+```bash
+cd ~/swift-RL/containers
+git clone --branch core_r0.14.0 https://github.com/NVIDIA/Megatron-LM.git megatron-lm-core_r0.14.0
+```
+
+# 4. ms-swiftを用意する
 ```bash
 cd ~/swift-RL/containers
 git clone https://github.com/modelscope/ms-swift.git
@@ -48,14 +56,7 @@ cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_chinese_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
-```
-
-# 4. Megatron-LM（training）を用意する。
-Megatron GRPO は **`megatron.training`** を import します。pip の `megatron-core` だけでは不足するため、**Megatron-LM リポジトリ（core_r0.14.0）** を clone してパスを通します。
-
-```bash
-cd ~/swift-RL/containers
-git clone --branch core_r0.14.0 https://github.com/NVIDIA/Megatron-LM.git megatron-lm-core_r0.14.0
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/checkpointing.py $HOME/swift-RL/containers/megatron-lm-core_r0.14.0/megatron/training/checkpointing.py
 ```
 
 起動時に **コンテナへ bind** し、**`MEGATRON_LM_PATH`** と **`PYTHONPATH`** に追加します。(実装済み)
