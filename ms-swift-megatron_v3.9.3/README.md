@@ -73,14 +73,17 @@ HF_TOKEN="api_key"
 singularity shell --nv \
   -B "$HOME/swift-RL:$HOME/swift-RL" \
   -B "/dev/shm:/dev/shm" \
+  -B "$HOME/singularity-post-training-medical:$HOME/singularity-post-training-medical" \
   $HOME/swift-RL/containers/swift3.9.3.sif
-python tools/dataset.py
+python $HOME/singularity-post-training-medical/tools/dataset.py
 ```
 
 # 7. Modelダウンロード
 ```
 # Singularity環境入った状態で
-python tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+python $HOME/singularity-post-training-medical/tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+# Singularityから出る
+exit
 ```
 
 # 8. 実行
