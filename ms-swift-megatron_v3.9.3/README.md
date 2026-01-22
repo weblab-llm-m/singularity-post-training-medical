@@ -47,7 +47,7 @@ git clone https://github.com/modelscope/ms-swift.git
 cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_chinese_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
-cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
+cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpts/qwen3_next.py
 ```
 
 # 4. Megatron-LM（training）を用意する。
