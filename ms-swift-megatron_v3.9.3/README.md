@@ -42,7 +42,7 @@ singularity pull swift3.9.3.sif docker:modelscope-registry.us-west-1.cr.aliyuncs
 # 3. ms-swiftを用意する
 ```bash
 cd ~/swift-RL/containers
-git clone https://github.com/modelscope/ms-swift.git
+git clone https://github.com/modelscope/ms-swift.git release/3.9
 # ms-swiftのpatchやplugin（拡張機能）を追加
 cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
