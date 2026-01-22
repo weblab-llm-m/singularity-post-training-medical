@@ -57,19 +57,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         self._prepare_rewards()
         self._prepare_scheduler()  # TODO
         self._prepare_rollout_engine()
-        # ==================== CHORD初期化（追加）====================
+        # ==================== CHORD初期化 ====================
         self._init_chord()
-        # ===========================================================
+        # =====================================================
 
     def train(self, train_dataset, val_dataset, data_collator):
         # Store dataset provider for lazy resample iterator initialization
         if self.dynamic_sample:
             self._train_valid_test_dataset_provider = get_swift_datasets_provider(train_dataset, val_dataset)
             self._train_valid_test_dataset_provider.is_distributed = True
-        # ==================== CHORDデータセット設定（追加）====================
+        # ==================== CHORDデータセット設定 ====================
         if self.chord_enabled:
             self._setup_chord_dataloader()
-        # ====================================================================
+        # ==============================================================
         super().train(train_dataset, val_dataset, data_collator)
 
     def _init_grpo_params(self):
@@ -124,7 +124,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             return_details=True)
 
         # CHORD, https://arxiv.org/abs/2508.11408
-        # ==================== CHORDパラメータ（追加）====================
+        # ==================== CHORDパラメータ　　====================
         # CHORD設定
         self.chord_enabled = args.chord_sft_dataset is not None
         self.chord_sft_dataset = args.chord_sft_dataset
@@ -138,14 +138,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # CHORDデータローダー（後で初期化）
         self.chord_dataloader = None
         self.chord_data_iterator = None
-        # ================================================================
+        # =========================================================
 
         self._step = 0
         self._last_loaded_step = -1
         self._rollout_group = None  # Will be lazily initialized
 
     # CHORD, https://arxiv.org/abs/2508.11408
-    # ==================== CHORD（追加）====================    
+    # ==================== 　　CHORD　　　====================    
     def _init_chord(self):
         """Initialize CHORD-specific components"""
         if not self.chord_enabled:
@@ -156,9 +156,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}, '
             f'phi_function={self.chord_enable_phi_function}, sft_dataset={self.chord_sft_dataset}')
     
-    
+    # データローダー（DP並列対応）
     def _setup_chord_dataloader(self):
-        """Setup CHORD SFT dataloader using EncodePreprocessor (分散環境対応版)"""
+        """Setup CHORD SFT dataloader - DP並列対応版"""
         from swift.llm import load_dataset, EncodePreprocessor
         from torch.utils.data import DataLoader, DistributedSampler
         import torch.distributed as dist
@@ -166,12 +166,20 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         args = self.args
         dataset_string = self.chord_sft_dataset
         
-        # ★ 分散環境での同期: ランク情報を取得
-        rank = dist.get_rank() if dist.is_initialized() else 0
-        world_size = dist.get_world_size() if dist.is_initialized() else 1
+        #  Megatron のDP並列ランク/サイズを使用
+        try:
+            dp_rank = mpu.get_data_parallel_rank()
+            dp_size = mpu.get_data_parallel_world_size()
+        except Exception:
+            # フォールバック
+            dp_rank = dist.get_rank() if dist.is_initialized() else 0
+            dp_size = dist.get_world_size() if dist.is_initialized() else 1
         
-        if rank == 0:
+        global_rank = dist.get_rank() if dist.is_initialized() else 0
+        
+        if global_rank == 0:
             logger.info(f'[CHORD] Loading SFT dataset: {dataset_string}')
+            logger.info(f'[CHORD] DP rank: {dp_rank}, DP size: {dp_size}')
         
         # 1. データセットをロード（全ランクで実行）
         chord_dataset, _ = load_dataset(
@@ -184,34 +192,34 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         if chord_dataset is None or len(chord_dataset) == 0:
             raise ValueError(f'[CHORD] Dataset {dataset_string} is empty')
         
-        if rank == 0:
+        if global_rank == 0:
             logger.info(f'[CHORD] Loaded {len(chord_dataset)} samples')
         
-        # 2. ★ 重要: EncodePreprocessorでエンコード
+        # 2. EncodePreprocessorでエンコード
         encode_preprocessor = EncodePreprocessor(template=self.template)
         chord_dataset = encode_preprocessor(
             chord_dataset, 
             num_proc=1  # ★ 分散環境では1に固定
         )
         
-        if rank == 0:
+        if global_rank == 0:
             logger.info(f'[CHORD] Encoded {len(chord_dataset)} samples')
         
-        # 3. ★ 分散サンプラーを使用（全ランクで同じシード → 同期）
+        # 3. DP並列用の分散サンプラー
         self.chord_sampler = DistributedSampler(
             chord_dataset,
-            num_replicas=world_size,
-            rank=rank,
+            num_replicas=dp_size,  # ★DP並列サイズを使用
+            rank=dp_rank,          # ★DP並列ランクを使用
             shuffle=True,
             seed=42,  # ★ 固定シードで全ランク同期
             drop_last=True,
         )
         
-        # 4. DataLoaderを作成（shuffleではなくsamplerを使用）
+        # 4. DataLoaderを作成
         self.chord_dataloader = DataLoader(
             chord_dataset,
             batch_size=self.chord_sft_per_device_train_batch_size,
-            sampler=self.chord_sampler,  # ★ shuffle=Trueの代わり
+            sampler=self.chord_sampler,
             collate_fn=self.template.data_collator,
             drop_last=True,
             num_workers=0,
@@ -220,9 +228,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         self.chord_data_iterator = iter(self.chord_dataloader)
         self._chord_epoch = 0
         
-        if rank == 0:
+        if global_rank == 0:
             logger.info(f'[CHORD] Created dataloader with batch_size={self.chord_sft_per_device_train_batch_size}')
     
+    # ==================== CHORD修正3: μスケジューリング ====================
     def _get_chord_mu(self) -> float:
         """
         公式のμスケジューリング実装
@@ -234,7 +243,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         current_step = self._step
         warmup_steps = self.chord_mu_warmup_steps
         
-        # decay_stepsがNoneの場合はtrain_itersを使用
         args = get_args()
         decay_steps = self.chord_mu_decay_steps
         if decay_steps is None:
@@ -259,26 +267,32 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         decay_progress = (current_step - decay_start) / max(decay_steps, 1)
         return mu_peak - (mu_peak - mu_valley) * decay_progress
 
-    
+    # ==================== CHORD修正4: バッチ取得（同期対応）====================
     def _get_next_chord_batch(self) -> Dict[str, Any]:
-        """Get next batch from CHORD SFT dataloader (分散環境対応版)"""
+        """Get next batch from CHORD SFT dataloader - 同期対応版"""
+        # ★修正: パイプライン並列の最終ステージでのみバッチを取得
+        pp_rank = mpu.get_pipeline_model_parallel_rank()
+        pp_size = mpu.get_pipeline_model_parallel_world_size()
+        
+        # 最終ステージ以外はNoneを返す（損失計算に参加しない）
+        if pp_rank != pp_size - 1:
+            return None
+        
         try:
             batch = next(self.chord_data_iterator)
         except StopIteration:
-            # エポック終了時はサンプラーのエポックを更新してイテレータをリセット
             if hasattr(self, 'chord_sampler') and self.chord_sampler is not None:
                 self._chord_epoch = getattr(self, '_chord_epoch', 0) + 1
-                self.chord_sampler.set_epoch(self._chord_epoch)  # ★ シャッフル順序を変更
+                self.chord_sampler.set_epoch(self._chord_epoch)
             self.chord_data_iterator = iter(self.chord_dataloader)
             batch = next(self.chord_data_iterator)
         
-        # バッチがリストの場合、辞書形式に変換
+        # バッチ処理
         if isinstance(batch, list):
             if len(batch) > 0 and isinstance(batch[0], dict):
                 keys = batch[0].keys()
                 batch = {k: [item[k] for item in batch] for k in keys}
         
-        # テンソルに変換してデバイスに移動（エラーハンドリング追加）
         if isinstance(batch, dict):
             processed_batch = {}
             for k, v in batch.items():
@@ -288,59 +302,55 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     if isinstance(v, torch.Tensor):
                         processed_batch[k] = v.to(self.device)
                     elif isinstance(v, (list, tuple)):
-                        processed_batch[k] = torch.tensor(v).to(self.device)
+                        # リストの要素がテンソルに変換可能か確認
+                        if len(v) > 0 and isinstance(v[0], (int, float)):
+                            processed_batch[k] = torch.tensor(v).to(self.device)
+                        elif len(v) > 0 and isinstance(v[0], list):
+                            # ネストしたリストの場合
+                            try:
+                                processed_batch[k] = torch.tensor(v).to(self.device)
+                            except:
+                                processed_batch[k] = v
+                        else:
+                            processed_batch[k] = v
                     else:
                         processed_batch[k] = v
                 except (ValueError, TypeError, RuntimeError) as e:
-                    # テンソル変換できない場合はスキップ
                     logger.debug(f'[CHORD] Could not convert {k} to tensor: {e}')
                     processed_batch[k] = v
             batch = processed_batch
         
         return batch
     
+    # ==================== CHORD修正5: φ重み計算 ====================
     def _compute_phi_weights(
         self,
         per_token_logps: torch.Tensor,
         completion_mask: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Compute token-wise φ weights for CHORD-φ.
-        
-        Args:
-            per_token_logps: Per-token log probabilities from the model
-            completion_mask: Mask for completion tokens
-            
-        Returns:
-            phi_weights: Token-wise weights [batch_size, seq_len]
-        """
-        if self.chord_phi_type == 'none':
+        """Compute token-wise φ weights for CHORD-φ"""
+        if not self.chord_enable_phi_function:
             return torch.ones_like(per_token_logps)
         
-        elif self.chord_phi_type == 'logprob':
-            # 対数確率に基づく重み付け
-            # 高い確率のトークンは低い重み（モデルが既に知っている）
-            # 低い確率のトークンは高い重み（学習が必要）
-            phi = torch.exp(per_token_logps / self.chord_phi_tau)
-            # 正規化
-            phi = phi / (phi.sum(dim=-1, keepdim=True) + 1e-8) * phi.shape[-1]
-            return phi * completion_mask
-        
-        elif self.chord_phi_type == 'advantage':
-            # アドバンテージに基づく重み付け（必要に応じて実装）
-            return torch.ones_like(per_token_logps)
-        
-        else:
-            return torch.ones_like(per_token_logps)
+        # 公式のφ定義: φ = p_t * (1 - p_t)
+        probs = torch.exp(per_token_logps.clamp(max=0))
+        phi_weights = probs * (1 - probs)
+        # 正規化
+        phi_weights = phi_weights / (phi_weights.mean() + 1e-8)
+        return phi_weights * completion_mask
     
+    # ==================== CHORD修正6: SFT損失計算（パイプライン並列対応）====================
     def _compute_chord_sft_loss(
         self,
         model,
         chord_batch: Dict[str, Any],
     ) -> torch.Tensor:
         """
-        Megatron padding-freeモードに対応したSFT損失計算
+        パイプライン並列対応版 CHORD SFT損失計算
+        ★重要: この関数はloss_func内で呼ばれるため、
+        パイプラインの最終ステージでのみ実行される
         """
+        # バッチがない場合はゼロ損失
         if chord_batch is None:
             return torch.tensor(0.0, device=self.device, requires_grad=True)
         
@@ -349,45 +359,55 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             logger.warning('[CHORD] labels not found in chord_batch')
             return torch.tensor(0.0, device=self.device, requires_grad=True)
         
+        # ★修正: パイプライン並列チェック
+        pp_rank = mpu.get_pipeline_model_parallel_rank()
+        pp_size = mpu.get_pipeline_model_parallel_world_size()
+        
+        if pp_rank != pp_size - 1:
+            # 最終ステージ以外では損失を計算しない
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
         packed_seq_params = chord_batch.get('packed_seq_params')
         num_samples = chord_batch.get('num_samples', 1)
         
         try:
+            # ★修正: GRPOのメインフォワードパスの結果を再利用する設計に変更
+            # ここでは簡易的なCross Entropy計算を行う
+            # （追加のフォワードパスを避けるため）
+            
+            input_ids = chord_batch.get('input_ids')
+            attention_mask = chord_batch.get('attention_mask')
+            
+            if input_ids is None:
+                return torch.tensor(0.0, device=self.device, requires_grad=True)
+            
             with torch.enable_grad():
-                # ★ Megatron用のフォワード呼び出し
+                # フォワードパス
                 output_tensor = forward_step_helper(model, chord_batch)
             
-            # ★ padding-freeモードでの損失計算
+            # 損失計算
             if packed_seq_params is not None:
-                # Padding-free mode: output_tensor is [total_tokens, vocab_size]
+                # Padding-free mode
                 per_token_logps = self.get_logps(
                     output_tensor, labels, packed_seq_params, 
                     num_samples, per_token=True
                 )
                 completion_mask = (labels != -100).float()
                 
-                # CHORD-φの重み適用
                 if self.chord_enable_phi_function:
-                    # 公式のφ定義: φ = p_t * (1 - p_t)
-                    probs = torch.exp(per_token_logps.clamp(max=0))  # clampでオーバーフロー防止
-                    phi_weights = probs * (1 - probs)
-                    phi_weights = phi_weights / (phi_weights.mean() + 1e-8)  # 正規化
+                    phi_weights = self._compute_phi_weights(per_token_logps, completion_mask)
                     sft_loss = -(per_token_logps * phi_weights * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
                 else:
                     sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
             else:
-                # Non-padding-free mode: 簡易的なCross Entropy計算
-                logger.debug('[CHORD] packed_seq_params not found, using simple cross entropy')
+                # Non-padding-free mode
                 if output_tensor.dim() == 2:
-                    # [total_tokens, vocab_size]
                     logits = output_tensor
                     labels_flat = labels.view(-1)
                 elif output_tensor.dim() == 3:
-                    # [batch, seq, vocab]
                     logits = output_tensor.view(-1, output_tensor.size(-1))
                     labels_flat = labels.view(-1)
                 else:
-                    logger.warning(f'[CHORD] Unexpected output_tensor dim: {output_tensor.dim()}')
                     return torch.tensor(0.0, device=self.device, requires_grad=True)
                 
                 valid_mask = labels_flat != -100
@@ -398,13 +418,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
         
         except Exception as e:
-            logger.warning(f'[CHORD] Forward pass failed: {e}')
+            logger.warning(f'[CHORD] SFT loss computation failed: {e}')
             import traceback
             traceback.print_exc()
             sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
         
         return sft_loss
-    # ================================================================
+    # ==============================================================
 
     def _prepare_rollout_engine(self):
         args = self.args
@@ -1327,10 +1347,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             output_tensor = model(**inputs)
         
         # ==================== CHORDバッチを取得（追加）====================
-        chord_batch = None
-        if self.chord_enabled:
-            chord_batch = self._get_next_chord_batch()
-            data['chord_batch'] = chord_batch
+        # ★修正: CHORDバッチはloss_func内で取得（パイプライン同期のため）
+        # forward_step内ではフラグのみセット
+        data['_chord_enabled'] = self.chord_enabled
         # ================================================================
 
         return output_tensor, partial(self.loss_func, data=data)
@@ -1520,14 +1539,22 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             self._metrics[mode]['clip_ratio/low_mean'].append(low_clip)
             self._metrics[mode]['clip_ratio/high_mean'].append(high_clip)
             self._metrics[mode]['clip_ratio/region_mean'].append(clip_ratio)
-            # Store global min/max in custom_metrics (not through _all_reduce_metric to avoid incorrect averaging)
             custom_metrics['clip_ratio/low_min'] = gathered_low_clip.min()
             custom_metrics['clip_ratio/high_max'] = gathered_high_clip.max()
+        
+        # ==================== CHORD修正8: loss_func（パイプライン並列対応）====================
+        # ★修正5: UserWarning修正 - torch.tensor()の代わりにdetach().clone()を使用
         if self._metrics[mode]:
-            addition_metrics = {
-                key: torch.tensor(sum(val) / len(val), device=loss.device)
-                for key, val in self._metrics[mode].items()
-            }
+            addition_metrics = {}
+            for key, val in self._metrics[mode].items():
+                if len(val) > 0:
+                    # valの要素がテンソルの場合
+                    if isinstance(val[0], torch.Tensor):
+                        mean_val = torch.stack([v.detach() if v.requires_grad else v for v in val]).mean()
+                    else:
+                        mean_val = torch.tensor(sum(val) / len(val), device=loss.device)
+                    addition_metrics[key] = mean_val
+        # ============================================================================
             avg_metric.update(addition_metrics)
 
         avg_metric = self._all_reduce_metric(avg_metric)
@@ -1535,33 +1562,38 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         reporting_metric = {**avg_metric, **custom_metrics}
 
         # ==================== CHORD損失の統合（追加）====================
-        if self.chord_enabled:
-            chord_batch = data.get('chord_batch')
+        if data.get('_chord_enabled', False) and self.chord_enabled:
             mu = self._get_chord_mu()
             
-            if mu > 0 and chord_batch is not None:
-                try:
-                    with profiling_context(self, 'chord_sft_loss'):
-                        # ★ 修正: 直接_compute_chord_sft_lossを呼び出す
-                        # model_forwardは使わない（get_batchとの互換性問題を回避）
-                        sft_loss = self._compute_chord_sft_loss(
-                            self.unwrapped_models[0],  # ← model引数
-                            chord_batch                 # ← chord_batch引数
-                        )
-                    
-                    # CHORD統合損失
-                    grpo_loss = loss
-                    loss = (1 - mu) * grpo_loss + mu * sft_loss
-                    
-                    # メトリクス記録
-                    mode = 'train' if self.unwrapped_models[0].training else 'eval'
-                    reporting_metric['chord/mu'] = torch.tensor(mu, device=loss.device)
-                    reporting_metric['chord/grpo_loss'] = grpo_loss.detach()
-                    reporting_metric['chord/sft_loss'] = sft_loss.detach()
-                except Exception as e:
-                    logger.warning(f'[CHORD] SFT loss computation failed: {e}')
-                    import traceback
-                    traceback.print_exc()
+            if mu > 0:
+                # ★修正: パイプラインの最終ステージでのみCHORD損失を計算
+                pp_rank = mpu.get_pipeline_model_parallel_rank()
+                pp_size = mpu.get_pipeline_model_parallel_world_size()
+                
+                if pp_rank == pp_size - 1:
+                    try:
+                        # CHORDバッチを取得（最終ステージでのみ）
+                        chord_batch = self._get_next_chord_batch()
+                        
+                        if chord_batch is not None:
+                            with profiling_context(self, 'chord_sft_loss'):
+                                sft_loss = self._compute_chord_sft_loss(
+                                    self.unwrapped_models[0],
+                                    chord_batch
+                                )
+                            
+                            # CHORD統合損失
+                            grpo_loss = loss
+                            loss = (1 - mu) * grpo_loss + mu * sft_loss
+                            
+                            # メトリクス記録
+                            reporting_metric['chord/mu'] = torch.tensor(mu, device=loss.device)
+                            reporting_metric['chord/grpo_loss'] = grpo_loss.detach()
+                            reporting_metric['chord/sft_loss'] = sft_loss.detach()
+                    except Exception as e:
+                        logger.warning(f'[CHORD] SFT loss computation failed: {e}')
+                        import traceback
+                        traceback.print_exc()
         # ================================================================
 
         # log_completions

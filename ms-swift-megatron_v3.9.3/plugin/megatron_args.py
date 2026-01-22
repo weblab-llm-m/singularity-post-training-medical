@@ -223,17 +223,41 @@ class RLHFMegatronArgumentsMixin:
 
             self.per_device_generation_batch_size = self.generation_batch_size // world_size
         
-        # ==================== CHORD初期化（ここに追加）====================
+        # ==================== CHORD初期化（修正版）====================
         def _init_chord():
+            """CHORD設定の検証と初期化"""
             if self.chord_sft_dataset is not None:
-                # CHORDが有効な場合の検証
-                if self.chord_mu_peak < 0 or self.chord_mu_peak > 1:
+                # μパラメータの検証
+                if not (0.0 <= self.chord_mu_peak <= 1.0):
                     raise ValueError(f'chord_mu_peak must be in [0, 1], got {self.chord_mu_peak}')
-                if self.chord_mu_valley < 0 or self.chord_mu_valley > self.chord_mu_peak:
+                if not (0.0 <= self.chord_mu_valley <= self.chord_mu_peak):
                     raise ValueError(f'chord_mu_valley must be in [0, chord_mu_peak], got {self.chord_mu_valley}')
-                logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
-                        f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}')
-        # =================================================================
+                if self.chord_mu_warmup_steps < 0:
+                    raise ValueError(f'chord_mu_warmup_steps must be >= 0, got {self.chord_mu_warmup_steps}')
+                if self.chord_mu_decay_steps is not None and self.chord_mu_decay_steps < 0:
+                    raise ValueError(f'chord_mu_decay_steps must be >= 0 or None, got {self.chord_mu_decay_steps}')
+                if self.chord_sft_per_device_train_batch_size < 1:
+                    raise ValueError(f'chord_sft_per_device_train_batch_size must be >= 1, '
+                                   f'got {self.chord_sft_per_device_train_batch_size}')
+                
+                # パイプライン並列での注意事項
+                if self.pipeline_model_parallel_size > 1:
+                    logger.warning(
+                        f'[CHORD] Using pipeline parallelism (PP={self.pipeline_model_parallel_size}). '
+                        f'CHORD SFT loss will only be computed on the last pipeline stage.'
+                    )
+                
+                logger.info(
+                    f'[CHORD] Configuration validated:\n'
+                    f'  - SFT dataset: {self.chord_sft_dataset}\n'
+                    f'  - Batch size per device: {self.chord_sft_per_device_train_batch_size}\n'
+                    f'  - μ schedule: peak={self.chord_mu_peak}, valley={self.chord_mu_valley}, '
+                    f'warmup={self.chord_mu_warmup_steps}, decay={self.chord_mu_decay_steps}\n'
+                    f'  - φ function: {self.chord_enable_phi_function}'
+                )
+            else:
+                logger.info('[CHORD] Disabled (chord_sft_dataset not specified)')
+        # =============================================================
 
         _check_not_supported()
         _check_batch_params()
