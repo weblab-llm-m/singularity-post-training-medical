@@ -230,6 +230,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --log_completions false \
           --attention_backend flash \
           --padding_free true \
+          --add_version false \
           --save '${CHECK_POINT_PATH}' \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
