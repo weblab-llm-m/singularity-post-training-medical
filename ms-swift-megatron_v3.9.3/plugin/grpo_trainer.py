@@ -1245,10 +1245,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         return rollout_batch, rewards_per_func
 
     def _maybe_compute_logps(self, batch: Dict[str, Any]) -> Dict[str, Any]:
-        # TODO: entropy
         inputs = {
             k: v
-            for k, v in batch.items() if k not in ['completion_mask', 'advantages', 'truncated_mask', 'seq_lengths']
+            for k, v in batch.items() if k not in [
+                'completion_mask', 'advantages', 'truncated_mask', 'seq_lengths',
+                '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count'
+            ]
         }
         if self.beta != 0.0:
             with torch.no_grad(), self.null_ref_context() as ref_models:
