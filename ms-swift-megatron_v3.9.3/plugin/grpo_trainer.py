@@ -283,6 +283,122 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # 正規化
         phi_weights = phi_weights / (phi_weights.mean() + 1e-8)
         return phi_weights * completion_mask
+    
+    # CHORD
+    def _merge_chord_into_batch(
+        self, 
+        grpo_batch: Dict[str, Any], 
+        chord_batch: Dict[str, Any],
+        chord_mu: float
+    ) -> Dict[str, Any]:
+        """ref/old logps計算後にCHORDサンプルをGRPOバッチに混合"""
+        
+        # CHORDサンプルをリスト形式に変換
+        sft_samples = self._convert_chord_batch_to_list(chord_batch)
+        if not sft_samples:
+            grpo_batch['_chord_mu'] = 0.0
+            grpo_batch['_num_sft_samples'] = 0
+            return grpo_batch
+        
+        num_grpo_samples = grpo_batch.get('num_samples', self.micro_batch_size)
+        num_sft_samples = len(sft_samples)
+        
+        # SFTサンプルをエンコード
+        template = self.template
+        with self._template_context(template):
+            sft_encoded = [template.encode(s, return_length=True) for s in sft_samples]
+        
+        # GRPOの既存データを取得
+        grpo_labels = grpo_batch['labels']
+        grpo_input_ids = grpo_batch['input_ids']
+        grpo_position_ids = grpo_batch.get('position_ids') or grpo_batch.get('text_position_ids')
+        grpo_completion_mask = grpo_batch['completion_mask']
+        grpo_advantages = grpo_batch['advantages']
+        grpo_seq_lengths = grpo_batch['seq_lengths']
+        
+        # GRPOのトークン数を記録
+        grpo_token_count = grpo_labels.shape[1]
+        
+        # SFTのみでdata_collatorを適用
+        args = get_args()
+        sft_collated = to_device(
+            template.data_collator(sft_encoded, padding_to=get_padding_to(args)), self.device)
+        
+        sft_labels = sft_collated['labels']
+        sft_input_ids = sft_collated['input_ids']
+        sft_position_ids = sft_collated.get('position_ids') or sft_collated.get('text_position_ids')
+        sft_completion_mask = (sft_labels != -100)
+        
+        # SFTのシーケンス長を計算
+        sft_packed_seq_params = sft_collated.get('packed_seq_params')
+        if sft_packed_seq_params is not None:
+            sft_seq_lengths = sft_packed_seq_params.cu_seqlens_q[1:] - sft_packed_seq_params.cu_seqlens_q[:-1]
+        else:
+            sft_seq_lengths = torch.tensor([sft_labels.shape[1]], device=self.device)
+        
+        # 連結
+        merged_labels = torch.cat([grpo_labels, sft_labels], dim=1)
+        merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=1)
+        merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=1)
+        
+        # position_idsの連結（オフセット調整）
+        if grpo_position_ids is not None and sft_position_ids is not None:
+            merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=1)
+        else:
+            merged_position_ids = None
+        
+        # advantagesの連結（SFTは0）
+        sft_advantages = torch.zeros(sft_labels.shape[1], device=self.device, dtype=grpo_advantages.dtype)
+        merged_advantages = torch.cat([grpo_advantages[:grpo_token_count], sft_advantages])
+        
+        # seq_lengthsの連結
+        merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
+        
+        # truncated_maskの連結
+        grpo_truncated_mask = grpo_batch['truncated_mask']
+        sft_truncated_mask = torch.zeros((1, sft_labels.shape[1]), device=self.device, dtype=torch.bool)
+        merged_truncated_mask = torch.cat([grpo_truncated_mask[:, :grpo_token_count], sft_truncated_mask], dim=1)
+        
+        # packed_seq_paramsの更新
+        grpo_packed = grpo_batch['packed_seq_params']
+        if grpo_packed is not None and sft_packed_seq_params is not None:
+            # cu_seqlensを連結（オフセット調整）
+            grpo_cu = grpo_packed.cu_seqlens_q
+            sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_cu[-1]
+            merged_cu = torch.cat([grpo_cu, sft_cu])
+            
+            # 新しいpacked_seq_paramsを作成
+            from copy import copy
+            merged_packed = copy(grpo_packed)
+            merged_packed.cu_seqlens_q = merged_cu
+            merged_packed.cu_seqlens_kv = merged_cu
+            merged_packed.num_samples = num_grpo_samples + num_sft_samples
+        else:
+            merged_packed = grpo_packed
+        
+        # バッチを更新
+        grpo_batch['labels'] = merged_labels
+        grpo_batch['input_ids'] = merged_input_ids
+        grpo_batch['completion_mask'] = merged_completion_mask
+        grpo_batch['advantages'] = merged_advantages
+        grpo_batch['truncated_mask'] = merged_truncated_mask
+        grpo_batch['seq_lengths'] = merged_seq_lengths
+        grpo_batch['packed_seq_params'] = merged_packed
+        grpo_batch['num_samples'] = num_grpo_samples + num_sft_samples
+        
+        if merged_position_ids is not None:
+            if 'text_position_ids' in grpo_batch:
+                grpo_batch['text_position_ids'] = merged_position_ids
+            else:
+                grpo_batch['position_ids'] = merged_position_ids
+        
+        # CHORDメタデータを追加
+        grpo_batch['_chord_mu'] = chord_mu
+        grpo_batch['_num_grpo_samples'] = num_grpo_samples
+        grpo_batch['_num_sft_samples'] = num_sft_samples
+        grpo_batch['_grpo_token_count'] = grpo_token_count
+        
+        return grpo_batch
 
     def _prepare_rollout_engine(self):
         args = self.args
@@ -736,30 +852,16 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # ========================================
 
         def _get_encoded_batch(rollout_batch, advantages, chord_batch=None, chord_mu=0.0):
-            # chord処理追加
+            """GRPOサンプルのみをエンコード（CHORDは後で混合）"""
             template = self.template
             with self._template_context(template):
-                grpo_encoded = [template.encode(data, return_length=True) for data in rollout_batch]
-            
-            num_grpo_samples = len(grpo_encoded)
-            num_sft_samples = 0
-            all_encoded = grpo_encoded
-            
-            # ★追加: CHORDサンプルを連結
-            if chord_batch is not None and chord_mu > 0:
-                # chord_batchはdict形式（DataLoaderから取得）-> 個別サンプルのリストに変換
-                sft_encoded = self._convert_chord_batch_to_list(chord_batch)
-                num_sft_samples = len(sft_encoded)
-                all_encoded = grpo_encoded + sft_encoded
-            
-            encoded_batch = to_device(
-                template.data_collator(all_encoded, padding_to=get_padding_to(args)), self.device)
+                encoded_batch = [template.encode(data, return_length=True) for data in rollout_batch]
+                encoded_batch = to_device(
+                    template.data_collator(encoded_batch, padding_to=get_padding_to(args)), self.device)
             
             labels = encoded_batch['labels']
             assert self.template.padding_free
-            position_ids = encoded_batch.get('text_position_ids')
-            if position_ids is None:
-                position_ids = encoded_batch.get('position_ids')
+            position_ids = encoded_batch.get('text_position_ids') or encoded_batch.get('position_ids')
             squeezed_position_ids = position_ids.squeeze()
             assert squeezed_position_ids is not None
             # Remove trailing padding zeros from position_ids to avoid interference
@@ -775,25 +877,18 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 torch.cat([(squeezed_position_ids == 0).nonzero(as_tuple=True)[0],
                            torch.tensor([len(squeezed_position_ids)]).to(squeezed_position_ids.device)]))
             
-            # ★修正: advantagesをSFT分拡張（SFTのadvantagesは0）
-            if num_sft_samples > 0:
-                sft_advantages = torch.zeros(num_sft_samples, device=self.device, dtype=advantages.dtype)
-                advantages = torch.cat([advantages, sft_advantages])
             advantages = torch.repeat_interleave(advantages, lengths)
             truncated_mask = torch.tensor([b['is_truncated'] for b in rollout_batch],
                                           dtype=torch.bool,
                                           device=self.device)
             
-            # ★追加: SFT分のtruncated_mask（Falseで埋める）
-            if num_sft_samples > 0:
-                sft_truncated = torch.zeros(num_sft_samples, dtype=torch.bool, device=self.device)
-                truncated_mask = torch.cat([truncated_mask, sft_truncated])
-
             truncated_mask = torch.repeat_interleave(truncated_mask, lengths).unsqueeze(0)
+            
             padding_length = labels.shape[1] - truncated_mask.shape[1]
             if padding_length > 0:
                 padding = torch.zeros((1, padding_length), device=truncated_mask.device, dtype=truncated_mask.dtype)
                 truncated_mask = torch.cat([truncated_mask, padding], dim=1)
+
             # Pad advantages to match the original position_ids length
             original_length = position_ids.shape[1]
             if advantages.shape[0] < original_length:
@@ -812,11 +907,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 'advantages': advantages,
                 'num_samples': len(rollout_batch),
                 'seq_lengths': lengths,
-                # ★追加: CHORD用メタデータ
-                '_chord_mu': chord_mu,
-                '_num_grpo_samples': num_grpo_samples,
-                '_num_sft_samples': num_sft_samples,
-                '_grpo_token_count': grpo_token_count,
+                # CHORDメタデータ（デフォルト値）
+                '_chord_mu': 0.0,
+                '_num_grpo_samples': len(rollout_batch),
+                '_num_sft_samples': 0,
+                '_grpo_token_count': labels.shape[1],
             })
 
             return encoded_batch
@@ -840,14 +935,20 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             micro_batch_data = self._maybe_replace_response_token(micro_batch_data)
             micro_batch_advantages = total_advantages[idx:idx + self.micro_batch_size]
             
-            # ★修正: CHORDバッチを渡してエンコード
-            chord_idx = idx // self.micro_batch_size
-            chord_batch = chord_batches[chord_idx] if chord_batches else None
-            
-            micro_batch_data = _get_encoded_batch(micro_batch_data, micro_batch_advantages, chord_batch, chord_mu)
-            
+            # ★修正: まずGRPOのみでエンコード（CHORDなし）
+            micro_batch_data = _get_encoded_batch(micro_batch_data, micro_batch_advantages, None, 0.0)
+
+            # ★修正: GRPOのみでref/old logpsを計算
             with profiling_context(self, 'compute_ref_old_logps'):
                 micro_batch_data = self._maybe_compute_logps(micro_batch_data)
+
+            # ★追加: ref/old logps計算後にCHORDバッチを混合
+            chord_idx = idx // self.micro_batch_size
+            chord_batch = chord_batches[chord_idx] if chord_batches else None
+            if chord_batch is not None and chord_mu > 0:
+                micro_batch_data = self._merge_chord_into_batch(
+                    micro_batch_data, chord_batch, chord_mu)
+
             mini_batch_data.append(micro_batch_data)
 
         if self.loss_type in ['cispo', 'dapo']:
