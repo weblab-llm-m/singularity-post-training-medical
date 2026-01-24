@@ -628,7 +628,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         if chord_batch is None:
             return []
         
-        # バッチサイズを取得
         batch_size = None
         for key in ['input_ids', 'labels', 'attention_mask']:
             if key in chord_batch and chord_batch[key] is not None:
@@ -654,6 +653,16 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     sample[key] = val[i]
                 else:
                     sample[key] = val
+            
+            # ★追加: lengthキーを計算して追加
+            if 'length' not in sample:
+                if 'input_ids' in sample:
+                    ids = sample['input_ids']
+                    if isinstance(ids, torch.Tensor):
+                        sample['length'] = ids.numel()
+                    elif isinstance(ids, list):
+                        sample['length'] = len(ids)
+            
             samples.append(sample)
         
         return samples
