@@ -648,20 +648,18 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if val is None:
                     continue
                 if isinstance(val, torch.Tensor):
-                    sample[key] = val[i]
+                    # ★修正: Tensorをリストに変換
+                    sample[key] = val[i].tolist()
                 elif isinstance(val, list):
                     sample[key] = val[i]
                 else:
                     sample[key] = val
             
-            # ★追加: lengthキーを計算して追加
+            # lengthキーを計算して追加
             if 'length' not in sample:
                 if 'input_ids' in sample:
                     ids = sample['input_ids']
-                    if isinstance(ids, torch.Tensor):
-                        sample['length'] = ids.numel()
-                    elif isinstance(ids, list):
-                        sample['length'] = len(ids)
+                    sample['length'] = len(ids) if isinstance(ids, list) else 1
             
             samples.append(sample)
         
