@@ -293,7 +293,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     ) -> Dict[str, Any]:
         """ref/old logps計算後にCHORDサンプルをGRPOバッチに混合"""
         
-        # CHORDサンプルをリスト形式に変換
+        # CHORDサンプルをリスト形式に変換（既にエンコード済み）
         sft_samples = self._convert_chord_batch_to_list(chord_batch)
         if not sft_samples:
             grpo_batch['_chord_mu'] = 0.0
@@ -303,10 +303,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         num_grpo_samples = grpo_batch.get('num_samples', self.micro_batch_size)
         num_sft_samples = len(sft_samples)
         
-        # SFTサンプルをエンコード
+        # ★修正: template.encode()を削除、既にエンコード済みなのでそのままdata_collatorへ
         template = self.template
+        args = get_args()
         with self._template_context(template):
-            sft_encoded = [template.encode(s, return_length=True) for s in sft_samples]
+            sft_collated = to_device(
+                template.data_collator(sft_samples, padding_to=get_padding_to(args)), self.device)
         
         # GRPOの既存データを取得
         grpo_labels = grpo_batch['labels']
@@ -318,11 +320,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         # GRPOのトークン数を記録
         grpo_token_count = grpo_labels.shape[1]
-        
-        # SFTのみでdata_collatorを適用
-        args = get_args()
-        sft_collated = to_device(
-            template.data_collator(sft_encoded, padding_to=get_padding_to(args)), self.device)
         
         sft_labels = sft_collated['labels']
         sft_input_ids = sft_collated['input_ids']
@@ -341,7 +338,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=1)
         merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=1)
         
-        # position_idsの連結（オフセット調整）
         if grpo_position_ids is not None and sft_position_ids is not None:
             merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=1)
         else:
@@ -362,12 +358,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # packed_seq_paramsの更新
         grpo_packed = grpo_batch['packed_seq_params']
         if grpo_packed is not None and sft_packed_seq_params is not None:
-            # cu_seqlensを連結（オフセット調整）
             grpo_cu = grpo_packed.cu_seqlens_q
             sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_cu[-1]
             merged_cu = torch.cat([grpo_cu, sft_cu])
             
-            # 新しいpacked_seq_paramsを作成
             from copy import copy
             merged_packed = copy(grpo_packed)
             merged_packed.cu_seqlens_q = merged_cu
