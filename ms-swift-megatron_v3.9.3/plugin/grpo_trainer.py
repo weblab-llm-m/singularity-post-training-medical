@@ -152,10 +152,16 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             logger.info('CHORD is disabled (chord_sft_dataset not specified)')
             return
         
-        logger.info(f'CHORD enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
-            f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}, '
-            f'phi_function={self.chord_enable_phi_function}, sft_dataset={self.chord_sft_dataset}')
-    
+        # パイプライン並列での制限を警告
+        pp_size = mpu.get_pipeline_model_parallel_world_size()
+        if pp_size > 1:
+            logger.warning(
+                f'[CHORD] Pipeline parallelism (PP={pp_size}) is enabled. '
+                f'CHORD will use batch mixing approach for PP compatibility.'
+            )
+        
+        logger.info(f'[CHORD] enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}')
+
     # データローダー（DP並列対応）
     def _setup_chord_dataloader(self):
         """Setup CHORD SFT dataloader - DP並列対応版"""
@@ -266,61 +272,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         decay_progress = (current_step - decay_start) / max(decay_steps, 1)
         return mu_peak - (mu_peak - mu_valley) * decay_progress
-
-    # ==================== CHORD修正4: バッチ取得（同期対応）====================
-    def _get_next_chord_batch(self) -> Dict[str, Any]:
-        """Get next batch from CHORD SFT dataloader - 同期対応版"""
-        # ★修正: パイプライン並列の最終ステージでのみバッチを取得
-        pp_rank = mpu.get_pipeline_model_parallel_rank()
-        pp_size = mpu.get_pipeline_model_parallel_world_size()
-        
-        # 最終ステージ以外はNoneを返す（損失計算に参加しない）
-        if pp_rank != pp_size - 1:
-            return None
-        
-        try:
-            batch = next(self.chord_data_iterator)
-        except StopIteration:
-            if hasattr(self, 'chord_sampler') and self.chord_sampler is not None:
-                self._chord_epoch = getattr(self, '_chord_epoch', 0) + 1
-                self.chord_sampler.set_epoch(self._chord_epoch)
-            self.chord_data_iterator = iter(self.chord_dataloader)
-            batch = next(self.chord_data_iterator)
-        
-        # バッチ処理
-        if isinstance(batch, list):
-            if len(batch) > 0 and isinstance(batch[0], dict):
-                keys = batch[0].keys()
-                batch = {k: [item[k] for item in batch] for k in keys}
-        
-        if isinstance(batch, dict):
-            processed_batch = {}
-            for k, v in batch.items():
-                if v is None:
-                    continue
-                try:
-                    if isinstance(v, torch.Tensor):
-                        processed_batch[k] = v.to(self.device)
-                    elif isinstance(v, (list, tuple)):
-                        # リストの要素がテンソルに変換可能か確認
-                        if len(v) > 0 and isinstance(v[0], (int, float)):
-                            processed_batch[k] = torch.tensor(v).to(self.device)
-                        elif len(v) > 0 and isinstance(v[0], list):
-                            # ネストしたリストの場合
-                            try:
-                                processed_batch[k] = torch.tensor(v).to(self.device)
-                            except:
-                                processed_batch[k] = v
-                        else:
-                            processed_batch[k] = v
-                    else:
-                        processed_batch[k] = v
-                except (ValueError, TypeError, RuntimeError) as e:
-                    logger.debug(f'[CHORD] Could not convert {k} to tensor: {e}')
-                    processed_batch[k] = v
-            batch = processed_batch
-        
-        return batch
     
     # ==================== CHORD修正5: φ重み計算 ====================
     def _compute_phi_weights(
@@ -338,93 +289,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # 正規化
         phi_weights = phi_weights / (phi_weights.mean() + 1e-8)
         return phi_weights * completion_mask
-    
-    # ==================== CHORD修正6: SFT損失計算（パイプライン並列対応）====================
-    def _compute_chord_sft_loss(
-        self,
-        model,
-        chord_batch: Dict[str, Any],
-    ) -> torch.Tensor:
-        """
-        パイプライン並列対応版 CHORD SFT損失計算
-        ★重要: この関数はloss_func内で呼ばれるため、
-        パイプラインの最終ステージでのみ実行される
-        """
-        # バッチがない場合はゼロ損失
-        if chord_batch is None:
-            return torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        labels = chord_batch.get('labels')
-        if labels is None:
-            logger.warning('[CHORD] labels not found in chord_batch')
-            return torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        # ★修正: パイプライン並列チェック
-        pp_rank = mpu.get_pipeline_model_parallel_rank()
-        pp_size = mpu.get_pipeline_model_parallel_world_size()
-        
-        if pp_rank != pp_size - 1:
-            # 最終ステージ以外では損失を計算しない
-            return torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        packed_seq_params = chord_batch.get('packed_seq_params')
-        num_samples = chord_batch.get('num_samples', 1)
-        
-        try:
-            # ★修正: GRPOのメインフォワードパスの結果を再利用する設計に変更
-            # ここでは簡易的なCross Entropy計算を行う
-            # （追加のフォワードパスを避けるため）
-            
-            input_ids = chord_batch.get('input_ids')
-            attention_mask = chord_batch.get('attention_mask')
-            
-            if input_ids is None:
-                return torch.tensor(0.0, device=self.device, requires_grad=True)
-            
-            with torch.enable_grad():
-                # フォワードパス
-                output_tensor = forward_step_helper(model, chord_batch)
-            
-            # 損失計算
-            if packed_seq_params is not None:
-                # Padding-free mode
-                per_token_logps = self.get_logps(
-                    output_tensor, labels, packed_seq_params, 
-                    num_samples, per_token=True
-                )
-                completion_mask = (labels != -100).float()
-                
-                if self.chord_enable_phi_function:
-                    phi_weights = self._compute_phi_weights(per_token_logps, completion_mask)
-                    sft_loss = -(per_token_logps * phi_weights * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
-                else:
-                    sft_loss = -(per_token_logps * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
-            else:
-                # Non-padding-free mode
-                if output_tensor.dim() == 2:
-                    logits = output_tensor
-                    labels_flat = labels.view(-1)
-                elif output_tensor.dim() == 3:
-                    logits = output_tensor.view(-1, output_tensor.size(-1))
-                    labels_flat = labels.view(-1)
-                else:
-                    return torch.tensor(0.0, device=self.device, requires_grad=True)
-                
-                valid_mask = labels_flat != -100
-                if valid_mask.sum() > 0:
-                    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='mean')
-                    sft_loss = loss_fct(logits, labels_flat)
-                else:
-                    sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        except Exception as e:
-            logger.warning(f'[CHORD] SFT loss computation failed: {e}')
-            import traceback
-            traceback.print_exc()
-            sft_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
-        
-        return sft_loss
-    # ==============================================================
 
     def _prepare_rollout_engine(self):
         args = self.args
@@ -765,6 +629,72 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             )
         return resample_data_iterator
 
+    def _convert_chord_batch_to_list(self, chord_batch: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """DataLoaderからのバッチを個別サンプルのリストに変換"""
+        if chord_batch is None:
+            return []
+        
+        # バッチサイズを取得
+        batch_size = None
+        for key in ['input_ids', 'labels', 'attention_mask']:
+            if key in chord_batch and chord_batch[key] is not None:
+                val = chord_batch[key]
+                if isinstance(val, torch.Tensor):
+                    batch_size = val.shape[0]
+                elif isinstance(val, list):
+                    batch_size = len(val)
+                break
+        
+        if batch_size is None or batch_size == 0:
+            return []
+        
+        samples = []
+        for i in range(batch_size):
+            sample = {}
+            for key, val in chord_batch.items():
+                if val is None:
+                    continue
+                if isinstance(val, torch.Tensor):
+                    sample[key] = val[i]
+                elif isinstance(val, list):
+                    sample[key] = val[i]
+                else:
+                    sample[key] = val
+            samples.append(sample)
+        
+        return samples
+
+    def _get_next_chord_batch_synchronized(self) -> Dict[str, Any]:
+        """
+        全DPランクで同期してバッチを取得
+        ★重要: PPステージに関係なく、すべてのランクで呼び出す
+        """
+        if self.chord_dataloader is None:
+            return None
+        
+        try:
+            batch = next(self.chord_data_iterator)
+        except StopIteration:
+            self._chord_epoch = getattr(self, '_chord_epoch', 0) + 1
+            if hasattr(self, 'chord_sampler') and self.chord_sampler is not None:
+                self.chord_sampler.set_epoch(self._chord_epoch)
+            self.chord_data_iterator = iter(self.chord_dataloader)
+            batch = next(self.chord_data_iterator)
+        
+        # テンソルをデバイスに移動
+        if isinstance(batch, dict):
+            processed = {}
+            for k, v in batch.items():
+                if v is None:
+                    continue
+                if isinstance(v, torch.Tensor):
+                    processed[k] = v.to(self.device)
+                else:
+                    processed[k] = v
+            return processed
+        
+        return batch
+
     def _replace_data_iterator(self, data_iterator, model):
         if self._step % self.steps_per_generation == 0:
             num_iters_per_step = self.get_num_iters_per_step()
@@ -799,13 +729,31 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             rollout_batch, rewards_per_func = self._dynamic_sampling(rollout_batch, rewards_per_func)
 
         advantages = self._compute_advantages(rollout_batch, rewards_per_func)
+        
+        # ==========CHORD=========================
+        chord_mu = self._get_chord_mu() if self.chord_enabled else 0.0
+        # ========================================
 
-        def _get_encoded_batch(rollout_batch, advantages):
+        def _get_encoded_batch(rollout_batch, advantages, chord_batch=None, chord_mu=0.0):
+            # chord処理追加
             template = self.template
             with self._template_context(template):
-                encoded_batch = [template.encode(data, return_length=True) for data in rollout_batch]
-                encoded_batch = to_device(
-                    template.data_collator(encoded_batch, padding_to=get_padding_to(args)), self.device)
+                grpo_encoded = [template.encode(data, return_length=True) for data in rollout_batch]
+            
+            num_grpo_samples = len(grpo_encoded)
+            num_sft_samples = 0
+            all_encoded = grpo_encoded
+            
+            # ★追加: CHORDサンプルを連結
+            if chord_batch is not None and chord_mu > 0:
+                # chord_batchはdict形式（DataLoaderから取得）-> 個別サンプルのリストに変換
+                sft_encoded = self._convert_chord_batch_to_list(chord_batch)
+                num_sft_samples = len(sft_encoded)
+                all_encoded = grpo_encoded + sft_encoded
+            
+            encoded_batch = to_device(
+                template.data_collator(all_encoded, padding_to=get_padding_to(args)), self.device)
+            
             labels = encoded_batch['labels']
             assert self.template.padding_free
             position_ids = encoded_batch.get('text_position_ids')
@@ -815,19 +763,31 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             assert squeezed_position_ids is not None
             # Remove trailing padding zeros from position_ids to avoid interference
             # Find the last non-zero position
+            # Trailing paddingを除去
             last_nonzero_idx = (squeezed_position_ids != 0).nonzero(as_tuple=True)[0]
             if len(last_nonzero_idx) > 0:
                 # Keep only up to the last non-zero position + 1 to include the last valid position
                 squeezed_position_ids = squeezed_position_ids[:last_nonzero_idx[-1] + 1]
 
-            # Calculate lengths based on sequence boundaries (position_ids == 0)
+            # シーケンス長計算Calculate lengths based on sequence boundaries (position_ids == 0)
             lengths = torch.diff(
                 torch.cat([(squeezed_position_ids == 0).nonzero(as_tuple=True)[0],
                            torch.tensor([len(squeezed_position_ids)]).to(squeezed_position_ids.device)]))
+            
+            # ★修正: advantagesをSFT分拡張（SFTのadvantagesは0）
+            if num_sft_samples > 0:
+                sft_advantages = torch.zeros(num_sft_samples, device=self.device, dtype=advantages.dtype)
+                advantages = torch.cat([advantages, sft_advantages])
             advantages = torch.repeat_interleave(advantages, lengths)
             truncated_mask = torch.tensor([b['is_truncated'] for b in rollout_batch],
                                           dtype=torch.bool,
                                           device=self.device)
+            
+            # ★追加: SFT分のtruncated_mask（Falseで埋める）
+            if num_sft_samples > 0:
+                sft_truncated = torch.zeros(num_sft_samples, dtype=torch.bool, device=self.device)
+                truncated_mask = torch.cat([truncated_mask, sft_truncated])
+
             truncated_mask = torch.repeat_interleave(truncated_mask, lengths).unsqueeze(0)
             padding_length = labels.shape[1] - truncated_mask.shape[1]
             if padding_length > 0:
@@ -841,12 +801,21 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 advantages = torch.cat([advantages, padding])
 
             completion_mask = labels != -100
+
+            # ★追加: GRPOとSFTの境界情報を記録
+            grpo_token_count = lengths[:num_grpo_samples].sum().item() if num_grpo_samples > 0 else 0
+
             encoded_batch.update({
                 'completion_mask': completion_mask,
                 'truncated_mask': truncated_mask,
                 'advantages': advantages,
                 'num_samples': len(rollout_batch),
                 'seq_lengths': lengths,
+                # ★追加: CHORD用メタデータ
+                '_chord_mu': chord_mu,
+                '_num_grpo_samples': num_grpo_samples,
+                '_num_sft_samples': num_sft_samples,
+                '_grpo_token_count': grpo_token_count,
             })
 
             return encoded_batch
@@ -854,13 +823,28 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # Step2: ref/old logps
         total_batch = gather_object(rollout_batch, group=rollout_group)
         total_advantages = gather(advantages, group=rollout_group)
+
+        # ★追加: CHORDサンプルを事前に取得（全マイクロバッチ分）
+        num_micro_batches = len(total_batch) // self.micro_batch_size
+        chord_batches = []
+        if self.chord_enabled and chord_mu > 0:
+            for _ in range(num_micro_batches):
+                chord_batch = self._get_next_chord_batch_synchronized()
+                chord_batches.append(chord_batch)
+
         mini_batch_data = []
 
         for idx in range(0, len(total_batch), self.micro_batch_size):
             micro_batch_data = total_batch[idx:idx + self.micro_batch_size]
             micro_batch_data = self._maybe_replace_response_token(micro_batch_data)
             micro_batch_advantages = total_advantages[idx:idx + self.micro_batch_size]
-            micro_batch_data = _get_encoded_batch(micro_batch_data, micro_batch_advantages)
+            
+            # ★修正: CHORDバッチを渡してエンコード
+            chord_idx = idx // self.micro_batch_size
+            chord_batch = chord_batches[chord_idx] if chord_batches else None
+            
+            micro_batch_data = _get_encoded_batch(micro_batch_data, micro_batch_advantages, chord_batch, chord_mu)
+            
             with profiling_context(self, 'compute_ref_old_logps'):
                 micro_batch_data = self._maybe_compute_logps(micro_batch_data)
             mini_batch_data.append(micro_batch_data)
@@ -1331,45 +1315,71 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
     @profiling_decorator
     def forward_step(self, data_iterator, model):
-        # train_batch_size
-        # return: output_tensor, loss_func
         data = self.get_batch(data_iterator)
         data.pop('loss_scale', None)
         inputs = {
-            k: v
-            for k, v in data.items() if k not in [
-                'completion_mask', 'ref_per_token_logps', 'advantages', 'old_per_token_logps', 'truncated_mask',
-                'seq_lengths'
-            ]
+            k: v for k, v in data.items() 
+            if k not in ['completion_mask', 'ref_per_token_logps', 'advantages', 
+                        'old_per_token_logps', 'truncated_mask', 'seq_lengths',
+                        '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count']
         }
 
         with self.stimer:
             output_tensor = model(**inputs)
         
-        # ==================== CHORDバッチを取得（追加）====================
-        # ★修正: CHORDバッチはloss_func内で取得（パイプライン同期のため）
-        # forward_step内ではフラグのみセット
-        data['_chord_enabled'] = self.chord_enabled
-        # ================================================================
-
+        # ★CHORDのメタデータはdataに既に含まれている（_generate_and_score_completionsで追加済み）
         return output_tensor, partial(self.loss_func, data=data)
 
     @profiling_decorator
     def loss_func(self, output_tensor: torch.Tensor, data: Dict[str, Any]):
+            # ★追加: CHORDメタデータを取得
+        chord_mu = data.get('_chord_mu', 0.0)
+        num_grpo_samples = data.get('_num_grpo_samples', data.get('num_samples', self.micro_batch_size))
+        num_sft_samples = data.get('_num_sft_samples', 0)
+        grpo_token_count = data.get('_grpo_token_count', 0)
+
         advantages = data['advantages']
         labels = data['labels']
         completion_mask = data['completion_mask']
         packed_seq_params = data['packed_seq_params']
         truncated_mask = data['truncated_mask']
         micro_batch_size = self.micro_batch_size
-        # Use full sequence lengths directly (get_logps returns full sequences in CP mode)
-        lengths = packed_seq_params.cu_seqlens_q[1:micro_batch_size
-                                                 + 1] - packed_seq_params.cu_seqlens_q[:micro_batch_size]
+
+        # ★修正: GRPOサンプル数を使用
+        lengths = packed_seq_params.cu_seqlens_q[1:num_grpo_samples + 1] - \
+                packed_seq_params.cu_seqlens_q[:num_grpo_samples]
         lengths_with_padding = packed_seq_params.cu_seqlens_q[1:] - packed_seq_params.cu_seqlens_q[:-1]
+        
+        # ★修正: GRPOとSFTのトークン範囲を分離
+        if num_sft_samples > 0 and chord_mu > 0 and grpo_token_count > 0:
+            # GRPO部分
+            grpo_labels = labels[:, :grpo_token_count]
+            grpo_completion_mask = completion_mask[:, :grpo_token_count]
+            grpo_advantages = advantages[:grpo_token_count]
+            grpo_truncated_mask = truncated_mask[:, :grpo_token_count]
+            
+            # SFT部分
+            sft_labels = labels[:, grpo_token_count:]
+            sft_completion_mask = completion_mask[:, grpo_token_count:]
+        else:
+            grpo_labels = labels
+            grpo_completion_mask = completion_mask
+            grpo_advantages = advantages
+            grpo_truncated_mask = truncated_mask
+            sft_labels = None
+            sft_completion_mask = None
 
         # get_logps with per_token=True now returns full sequences (all_gather in CP mode)
         per_token_logps = self.get_logps(
             output_tensor, labels, packed_seq_params, packed_seq_params.num_samples, per_token=True)
+
+        # ★修正: GRPO部分のみ抽出
+        if grpo_token_count > 0 and num_sft_samples > 0:
+            grpo_per_token_logps = per_token_logps[:, :grpo_token_count]
+            sft_per_token_logps = per_token_logps[:, grpo_token_count:]
+        else:
+            grpo_per_token_logps = per_token_logps
+            sft_per_token_logps = None
 
         if self.args.overlong_filter and truncated_mask.any():
             completion_mask = completion_mask & (~truncated_mask)
@@ -1377,51 +1387,62 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 logger.warning('All completions are truncated in this batch. Loss and grad_norm will be 0. '
                                'Consider increasing max_completion_length')
 
+        # KL計算（GRPOのみ）
         if self.beta != 0.0:
             ref_per_token_logps = data.get('ref_per_token_logps')
+            if grpo_token_count > 0 and num_sft_samples > 0 and ref_per_token_logps is not None:
+                grpo_ref_per_token_logps = ref_per_token_logps[:, :grpo_token_count]
+            else:
+                grpo_ref_per_token_logps = ref_per_token_logps
             per_token_kl = (
                 torch.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1)
 
-        old_per_token_logps = (
-            per_token_logps.detach() if data.get('old_per_token_logps') is None else data['old_per_token_logps'])
-        log_ratio = per_token_logps - old_per_token_logps
+        # old_logs処理（GRPOのみ）
+        old_per_token_logps = data.get('old_per_token_logps')
+        if old_per_token_logps is None:
+            grpo_old_per_token_logps = grpo_per_token_logps.detach()
+        else:
+            if grpo_token_count > 0 and num_sft_samples > 0:
+                grpo_old_per_token_logps = old_per_token_logps[:, :grpo_token_count]
+            else:
+                grpo_old_per_token_logps = old_per_token_logps
+        
+        log_ratio = grpo_per_token_logps - grpo_old_per_token_logps
 
+        # ★修正: GRPOのlengths_with_paddingもGRPO部分のみ
+        grpo_lengths_with_padding = lengths_with_padding[:num_grpo_samples]
+
+        # importance sampling計算（既存コード、変数名を調整）
         if self.importance_sampling_level == 'token':
             log_importance_weights = log_ratio
         elif self.importance_sampling_level in ['sequence', 'sequence_token']:
-            log_ratio_list = torch.split(log_ratio.squeeze(0), lengths_with_padding.tolist())
-            mask_list = torch.split(completion_mask.squeeze(0), lengths_with_padding.tolist())
-            # Optimized: compute weighted sum for each sequence (avoid list comprehension overhead)
-            # Use torch.stack on results instead of intermediate lists
+            log_ratio_list = torch.split(log_ratio.squeeze(0), grpo_lengths_with_padding.tolist())
+            mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
             seq_weights = torch.stack([(lr * m).sum() / m.sum().clamp(min=1.0)
-                                       for lr, m in zip(log_ratio_list, mask_list)])
+                                    for lr, m in zip(log_ratio_list, mask_list)])
             seq_level_log_weights = seq_weights.to(log_ratio.dtype).unsqueeze(-1)
             if self.importance_sampling_level == 'sequence':
                 log_importance_weights = seq_level_log_weights
             else:
                 seq_level_log_weight = seq_level_log_weights.detach()
-                # Vectorized: use repeat_interleave with tensor directly
                 seq_level_log_weight = torch.repeat_interleave(
-                    seq_level_log_weight.squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
-                log_importance_weights = per_token_logps - per_token_logps.detach() + seq_level_log_weight
+                    seq_level_log_weight.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
+                log_importance_weights = grpo_per_token_logps - grpo_per_token_logps.detach() + seq_level_log_weight
         else:
-            raise ValueError(
-                f"Unknown importance sampling level: {self.importance_sampling_level}. Possible values are 'token' "
-                ",'sequence' and 'sequence_token'.")
+            raise ValueError(f"Unknown importance sampling level: {self.importance_sampling_level}")
+
 
         coef_1 = torch.exp(log_importance_weights)
 
+        # GRPO損失計算
         if self.loss_type == 'cispo':
             clamped_ratios = torch.clamp(coef_1, max=self.epsilon_high).detach()
             if self.template.padding_free:
-                # In padding_free + sequence mode, coef_1 is [num_samples, 1]
-                # We need to expand to [1, total_tokens] for token-level loss computation
                 if self.importance_sampling_level == 'sequence':
-                    # Vectorized: expand sequence-level weights to token-level without gradient
                     clamped_ratios = torch.repeat_interleave(
-                        clamped_ratios.squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
-                advantages = advantages[-clamped_ratios.shape[1]:]
-                per_token_loss = -clamped_ratios * advantages.unsqueeze(0) * per_token_logps
+                        clamped_ratios.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
+                grpo_advantages_aligned = grpo_advantages[-clamped_ratios.shape[1]:]
+                per_token_loss = -clamped_ratios * grpo_advantages_aligned.unsqueeze(0) * grpo_per_token_logps
             else:
                 raise NotImplementedError
         elif self.loss_type in ['grpo', 'bnpo', 'dr_grpo', 'dapo']:
@@ -1430,49 +1451,59 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 coef_1 = torch.clamp(coef_1, max=self.args.delta)
 
             if self.template.padding_free:
-                # In padding_free + sequence mode, coef_1 is [num_samples, 1]
-                # We need to expand to [1, total_tokens] for token-level loss computation
                 if self.importance_sampling_level == 'sequence':
-                    # Vectorized: expand sequence-level weights to token-level without gradient
-                    coef_1 = torch.repeat_interleave(coef_1.squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
-                    coef_2 = torch.repeat_interleave(coef_2.squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
+                    coef_1 = torch.repeat_interleave(coef_1.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
+                    coef_2 = torch.repeat_interleave(coef_2.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
 
-                advantages = advantages[-coef_1.shape[1]:]
-                per_token_loss1 = coef_1 * advantages.unsqueeze(0)
-                per_token_loss2 = coef_2 * advantages.unsqueeze(0)
+                grpo_advantages_aligned = grpo_advantages[-coef_1.shape[1]:]
+                per_token_loss1 = coef_1 * grpo_advantages_aligned.unsqueeze(0)
+                per_token_loss2 = coef_2 * grpo_advantages_aligned.unsqueeze(0)
             else:
                 raise NotImplementedError
-                # per_token_loss1 = coef_1 * advantages.unsqueeze(1)
-                # per_token_loss2 = coef_2 * advantages.unsqueeze(1)
             per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
         else:
             raise ValueError(f'Unknown loss type: {self.loss_type}')
+        
         if self.beta != 0.0:
             per_token_loss = per_token_loss + self.beta * per_token_kl
 
+        # GRPO損失の集約
         if self.loss_type == 'grpo':
-            loss_list = torch.split(per_token_loss.squeeze(0), lengths_with_padding.tolist())
-            mask_list = torch.split(completion_mask.squeeze(0), lengths_with_padding.tolist())
-
-            sample_loss = torch.stack([(loss * mask).sum() / mask.sum().clamp(min=1.0)
-                                       for loss, mask in zip(loss_list[:micro_batch_size], mask_list[:micro_batch_size])
-                                       ])
-            loss = sample_loss.mean()
+            loss_list = torch.split(per_token_loss.squeeze(0), grpo_lengths_with_padding.tolist())
+            mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
+            sample_loss = torch.stack([
+                (loss * mask).sum() / mask.sum().clamp(min=1.0)
+                for loss, mask in zip(loss_list[:num_grpo_samples], mask_list[:num_grpo_samples])
+            ])
+            grpo_loss = sample_loss.mean()
         elif self.loss_type == 'bnpo':
-            loss = (per_token_loss * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+            grpo_loss = (per_token_loss * grpo_completion_mask).sum() / grpo_completion_mask.sum().clamp(min=1.0)
         elif self.loss_type == 'dr_grpo':
-            loss = (per_token_loss * completion_mask).sum() / (micro_batch_size * self.max_completion_length)
+            grpo_loss = (per_token_loss * grpo_completion_mask).sum() / (num_grpo_samples * self.max_completion_length)
         elif self.loss_type in ['cispo', 'dapo']:
-            # CISPO and DAPO: Normalize by total completion tokens across all processes
-            # num_items_in_batch is calculated in _generate_and_score_completions and stored in data
             num_items_in_batch = data['num_items_in_batch']
-            # Divide by DP world size to get the normalizer for each process
-            # (num_items_in_batch is the global sum across all DP processes)
             dp_size = mpu.get_data_parallel_world_size()
             normalizer = num_items_in_batch / dp_size
-            loss = (per_token_loss * completion_mask).sum() / normalizer.clamp(min=1.0)
+            grpo_loss = (per_token_loss * grpo_completion_mask).sum() / normalizer.clamp(min=1.0)
         else:
             raise ValueError(f'Unknown loss type: {self.loss_type}')
+        
+        # 追加：SFT損失計算
+        sft_loss = None
+        if num_sft_samples > 0 and chord_mu > 0 and sft_per_token_logps is not None:
+            sft_loss = -(sft_per_token_logps * sft_completion_mask).sum() / sft_completion_mask.sum().clamp(min=1.0)
+            
+            # φ関数の適用（オプション）
+            if self.chord_enable_phi_function:
+                phi_weights = self._compute_phi_weights(sft_per_token_logps, sft_completion_mask)
+                sft_loss = -(sft_per_token_logps * phi_weights * sft_completion_mask).sum() / \
+                        sft_completion_mask.sum().clamp(min=1.0)
+
+        # ★追加: 最終損失の計算（CHORD混合）
+        if sft_loss is not None and chord_mu > 0:
+            loss = (1 - chord_mu) * grpo_loss + chord_mu * sft_loss
+        else:
+            loss = grpo_loss
 
         avg_metric = {
             'loss': loss.clone().detach(),
@@ -1490,10 +1521,17 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             kl_value = (per_token_kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
             avg_metric['kl'] = kl_value.clone().detach()
 
+        # ★追加: CHORDメトリクス
+        if sft_loss is not None and chord_mu > 0:
+            custom_metrics['chord/mu'] = torch.tensor(chord_mu, device=loss.device)
+            custom_metrics['chord/grpo_loss'] = grpo_loss.detach()
+            custom_metrics['chord/sft_loss'] = sft_loss.detach()
+
         mode = 'train' if self.unwrapped_models[0].training else 'eval'
 
         # Compute clipping metrics
         completion_token_count = completion_mask.sum().clamp(min=1.0)
+
         if self.loss_type == 'cispo':
             # CISPO: Only track upper bound clipping
             if self.template.padding_free:
@@ -1548,7 +1586,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             addition_metrics = {}
             for key, val in self._metrics[mode].items():
                 if len(val) > 0:
-                    # valの要素がテンソルの場合
                     if isinstance(val[0], torch.Tensor):
                         mean_val = torch.stack([v.detach() if v.requires_grad else v for v in val]).mean()
                     else:
