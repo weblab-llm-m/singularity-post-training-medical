@@ -313,8 +313,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # GRPOの既存データを取得
         grpo_labels = grpo_batch['labels']
         grpo_input_ids = grpo_batch['input_ids']
-        if grpo_position_ids is None:
-            grpo_position_ids = grpo_batch.get('text_position_ids')
+        grpo_position_ids = grpo_batch.get('position_ids') if 'position_ids' in grpo_batch else grpo_batch.get('text_position_ids')
         grpo_completion_mask = grpo_batch['completion_mask']
         grpo_advantages = grpo_batch['advantages']
         grpo_seq_lengths = grpo_batch['seq_lengths']
@@ -325,8 +324,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         sft_labels = sft_collated['labels']
         sft_input_ids = sft_collated['input_ids']
         sft_position_ids = sft_collated.get('position_ids')
-        if sft_position_ids is None:
-            sft_position_ids = sft_collated.get('text_position_ids')
+        sft_position_ids = sft_collated.get('position_ids') if 'position_ids' in sft_collated else sft_collated.get('text_position_ids')
         sft_completion_mask = (sft_labels != -100)
         
         # SFTのシーケンス長を計算
