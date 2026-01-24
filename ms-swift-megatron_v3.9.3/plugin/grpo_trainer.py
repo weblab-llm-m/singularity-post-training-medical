@@ -315,61 +315,94 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         grpo_completion_mask = grpo_batch['completion_mask']
         grpo_advantages = grpo_batch['advantages']
         grpo_seq_lengths = grpo_batch['seq_lengths']
+        grpo_packed = grpo_batch.get('packed_seq_params')
         
-        # ★修正: GRPOの実際のトークン数を取得（padding含む）
-        grpo_token_count = grpo_input_ids.shape[1]
-        
+        # SFTデータを取得
         sft_labels = sft_collated['labels']
         sft_input_ids = sft_collated['input_ids']
         sft_position_ids = sft_collated.get('position_ids') if 'position_ids' in sft_collated else sft_collated.get('text_position_ids')
-        sft_completion_mask = (sft_labels != -100)
+        sft_packed = sft_collated.get('packed_seq_params')
         
-        # SFTのシーケンス長を計算
-        sft_packed_seq_params = sft_collated.get('packed_seq_params')
-        if sft_packed_seq_params is not None:
-            sft_seq_lengths = sft_packed_seq_params.cu_seqlens_q[1:] - sft_packed_seq_params.cu_seqlens_q[:-1]
-        else:
-            sft_seq_lengths = torch.tensor([sft_labels.shape[1]], device=self.device)
-        
-        # 連結
-        merged_labels = torch.cat([grpo_labels, sft_labels], dim=1)
-        merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=1)
-        merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=1)
-        
-        if grpo_position_ids is not None and sft_position_ids is not None:
-            merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=1)
-        else:
-            merged_position_ids = None
-        
-        # advantagesの連結（SFTは0）
-        sft_advantages = torch.zeros(sft_labels.shape[1], device=self.device, dtype=grpo_advantages.dtype)
-        merged_advantages = torch.cat([grpo_advantages[:grpo_token_count], sft_advantages])
-        
-        # seq_lengthsの連結
-        merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
-        
-        # truncated_maskの連結
-        grpo_truncated_mask = grpo_batch['truncated_mask']
-        sft_truncated_mask = torch.zeros((1, sft_labels.shape[1]), device=self.device, dtype=torch.bool)
-        merged_truncated_mask = torch.cat([grpo_truncated_mask[:, :grpo_token_count], sft_truncated_mask], dim=1)
-        
-        # ★修正: packed_seq_paramsの更新（正しいオフセット計算）
-        grpo_packed = grpo_batch.get('packed_seq_params')
-        if grpo_packed is not None and sft_packed_seq_params is not None:
-            # GRPOのcu_seqlensの最後の値（=GRPOの総トークン数）をオフセットとして使用
-            grpo_cu = grpo_packed.cu_seqlens_q
-            grpo_total_tokens = grpo_cu[-1].item()  # GRPOの実際のパックされたトークン数
+        # ★修正: padding-freeモードでの正しい連結
+        if grpo_packed is not None and sft_packed is not None:
+            # padding-freeモード: 実際のパックされたトークン数を取得
+            grpo_actual_tokens = grpo_packed.cu_seqlens_q[-1].item()
+            sft_actual_tokens = sft_packed.cu_seqlens_q[-1].item()
             
-            # SFTのcu_seqlensにオフセットを追加（最初の0は除く）
-            sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_total_tokens
-            merged_cu = torch.cat([grpo_cu, sft_cu])
+            # 実際のトークンのみを抽出して連結
+            grpo_input_ids_actual = grpo_input_ids[:, :grpo_actual_tokens]
+            sft_input_ids_actual = sft_input_ids[:, :sft_actual_tokens]
+            merged_input_ids = torch.cat([grpo_input_ids_actual, sft_input_ids_actual], dim=1)
+            
+            grpo_labels_actual = grpo_labels[:, :grpo_actual_tokens]
+            sft_labels_actual = sft_labels[:, :sft_actual_tokens]
+            merged_labels = torch.cat([grpo_labels_actual, sft_labels_actual], dim=1)
+            
+            # completion_mask
+            grpo_completion_mask_actual = grpo_completion_mask[:, :grpo_actual_tokens]
+            sft_completion_mask = (sft_labels_actual != -100)
+            merged_completion_mask = torch.cat([grpo_completion_mask_actual, sft_completion_mask], dim=1)
+            
+            # position_ids
+            if grpo_position_ids is not None and sft_position_ids is not None:
+                grpo_pos_actual = grpo_position_ids[:, :grpo_actual_tokens]
+                sft_pos_actual = sft_position_ids[:, :sft_actual_tokens]
+                merged_position_ids = torch.cat([grpo_pos_actual, sft_pos_actual], dim=1)
+            else:
+                merged_position_ids = None
+            
+            # advantages
+            grpo_advantages_actual = grpo_advantages[:grpo_actual_tokens]
+            sft_advantages = torch.zeros(sft_actual_tokens, device=self.device, dtype=grpo_advantages.dtype)
+            merged_advantages = torch.cat([grpo_advantages_actual, sft_advantages])
+            
+            # truncated_mask
+            grpo_truncated_mask = grpo_batch['truncated_mask']
+            grpo_truncated_actual = grpo_truncated_mask[:, :grpo_actual_tokens]
+            sft_truncated_mask = torch.zeros((1, sft_actual_tokens), device=self.device, dtype=torch.bool)
+            merged_truncated_mask = torch.cat([grpo_truncated_actual, sft_truncated_mask], dim=1)
+            
+            # seq_lengths
+            sft_seq_lengths = sft_packed.cu_seqlens_q[1:] - sft_packed.cu_seqlens_q[:-1]
+            merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
+            
+            # cu_seqlensを正しく更新
+            sft_cu_offset = sft_packed.cu_seqlens_q[1:] + grpo_actual_tokens
+            merged_cu = torch.cat([grpo_packed.cu_seqlens_q, sft_cu_offset])
             
             from copy import copy
             merged_packed = copy(grpo_packed)
             merged_packed.cu_seqlens_q = merged_cu
             merged_packed.cu_seqlens_kv = merged_cu
             merged_packed.num_samples = num_grpo_samples + num_sft_samples
+            
+            grpo_token_count = grpo_actual_tokens
+            
         else:
+            # 非padding-freeモード
+            grpo_token_count = grpo_input_ids.shape[1]
+            
+            merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=1)
+            merged_labels = torch.cat([grpo_labels, sft_labels], dim=1)
+            
+            sft_completion_mask = (sft_labels != -100)
+            merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=1)
+            
+            if grpo_position_ids is not None and sft_position_ids is not None:
+                merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=1)
+            else:
+                merged_position_ids = None
+            
+            sft_advantages = torch.zeros(sft_labels.shape[1], device=self.device, dtype=grpo_advantages.dtype)
+            merged_advantages = torch.cat([grpo_advantages, sft_advantages])
+            
+            grpo_truncated_mask = grpo_batch['truncated_mask']
+            sft_truncated_mask = torch.zeros((1, sft_labels.shape[1]), device=self.device, dtype=torch.bool)
+            merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=1)
+            
+            sft_seq_lengths = torch.tensor([sft_labels.shape[1]], device=self.device)
+            merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
+            
             merged_packed = grpo_packed
         
         # バッチを更新
@@ -388,12 +421,17 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 grpo_batch['position_ids'] = merged_position_ids
         
-        # ★修正: attention_maskも連結が必要な場合
+        # attention_mask
         if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
-            grpo_attn_mask = grpo_batch['attention_mask']
-            sft_attn_mask = sft_collated['attention_mask']
-            if grpo_attn_mask is not None and sft_attn_mask is not None:
-                grpo_batch['attention_mask'] = torch.cat([grpo_attn_mask, sft_attn_mask], dim=1)
+            grpo_attn = grpo_batch['attention_mask']
+            sft_attn = sft_collated['attention_mask']
+            if grpo_attn is not None and sft_attn is not None:
+                if grpo_packed is not None:
+                    grpo_attn_actual = grpo_attn[:, :grpo_token_count]
+                    sft_attn_actual = sft_attn[:, :sft_actual_tokens] if sft_packed else sft_attn
+                    grpo_batch['attention_mask'] = torch.cat([grpo_attn_actual, sft_attn_actual], dim=1)
+                else:
+                    grpo_batch['attention_mask'] = torch.cat([grpo_attn, sft_attn], dim=1)
         
         # CHORDメタデータを追加
         grpo_batch['_chord_mu'] = chord_mu
