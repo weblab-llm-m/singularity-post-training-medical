@@ -152,15 +152,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             logger.info('CHORD is disabled (chord_sft_dataset not specified)')
             return
         
-        # パイプライン並列での制限を警告
-        pp_size = mpu.get_pipeline_model_parallel_world_size()
-        if pp_size > 1:
-            logger.warning(
-                f'[CHORD] Pipeline parallelism (PP={pp_size}) is enabled. '
-                f'CHORD will use batch mixing approach for PP compatibility.'
-            )
-        
-        logger.info(f'[CHORD] enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}')
+        logger.info(f'[CHORD] enabled: mu_peak={self.chord_mu_peak}, mu_valley={self.chord_mu_valley}, '
+        f'warmup_steps={self.chord_mu_warmup_steps}, decay_steps={self.chord_mu_decay_steps}, '
+        f'phi_function={self.chord_enable_phi_function}, sft_dataset={self.chord_sft_dataset}')
 
     # データローダー（DP並列対応）
     def _setup_chord_dataloader(self):
