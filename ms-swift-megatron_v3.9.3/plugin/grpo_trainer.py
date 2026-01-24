@@ -357,7 +357,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         merged_truncated_mask = torch.cat([grpo_truncated_mask[:, :grpo_token_count], sft_truncated_mask], dim=1)
         
         # packed_seq_paramsの更新
-        grpo_packed = grpo_batch['packed_seq_params']
+        grpo_packed = grpo_batch.get('packed_seq_params')
         if grpo_packed is not None and sft_packed_seq_params is not None:
             grpo_cu = grpo_packed.cu_seqlens_q
             sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_cu[-1]
