@@ -898,9 +898,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
             completion_mask = labels != -100
 
-            # ★追加: GRPOとSFTの境界情報を記録
-            grpo_token_count = lengths[:num_grpo_samples].sum().item() if num_grpo_samples > 0 else 0
-
             encoded_batch.update({
                 'completion_mask': completion_mask,
                 'truncated_mask': truncated_mask,
