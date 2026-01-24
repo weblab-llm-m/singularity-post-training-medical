@@ -293,7 +293,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
     ) -> Dict[str, Any]:
         """ref/old logps計算後にCHORDサンプルをGRPOバッチに混合"""
         
-        # CHORDサンプルをリスト形式に変換（既にエンコード済み）
         sft_samples = self._convert_chord_batch_to_list(chord_batch)
         if not sft_samples:
             grpo_batch['_chord_mu'] = 0.0
@@ -303,7 +302,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         num_grpo_samples = grpo_batch.get('num_samples', self.micro_batch_size)
         num_sft_samples = len(sft_samples)
         
-        # ★修正: template.encode()を削除、既にエンコード済みなのでそのままdata_collatorへ
         template = self.template
         args = get_args()
         with self._template_context(template):
@@ -318,12 +316,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         grpo_advantages = grpo_batch['advantages']
         grpo_seq_lengths = grpo_batch['seq_lengths']
         
-        # GRPOのトークン数を記録
-        grpo_token_count = grpo_labels.shape[1]
+        # ★修正: GRPOの実際のトークン数を取得（padding含む）
+        grpo_token_count = grpo_input_ids.shape[1]
         
         sft_labels = sft_collated['labels']
         sft_input_ids = sft_collated['input_ids']
-        sft_position_ids = sft_collated.get('position_ids')
         sft_position_ids = sft_collated.get('position_ids') if 'position_ids' in sft_collated else sft_collated.get('text_position_ids')
         sft_completion_mask = (sft_labels != -100)
         
@@ -356,11 +353,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         sft_truncated_mask = torch.zeros((1, sft_labels.shape[1]), device=self.device, dtype=torch.bool)
         merged_truncated_mask = torch.cat([grpo_truncated_mask[:, :grpo_token_count], sft_truncated_mask], dim=1)
         
-        # packed_seq_paramsの更新
+        # ★修正: packed_seq_paramsの更新（正しいオフセット計算）
         grpo_packed = grpo_batch.get('packed_seq_params')
         if grpo_packed is not None and sft_packed_seq_params is not None:
+            # GRPOのcu_seqlensの最後の値（=GRPOの総トークン数）をオフセットとして使用
             grpo_cu = grpo_packed.cu_seqlens_q
-            sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_cu[-1]
+            grpo_total_tokens = grpo_cu[-1].item()  # GRPOの実際のパックされたトークン数
+            
+            # SFTのcu_seqlensにオフセットを追加（最初の0は除く）
+            sft_cu = sft_packed_seq_params.cu_seqlens_q[1:] + grpo_total_tokens
             merged_cu = torch.cat([grpo_cu, sft_cu])
             
             from copy import copy
@@ -386,6 +387,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 grpo_batch['text_position_ids'] = merged_position_ids
             else:
                 grpo_batch['position_ids'] = merged_position_ids
+        
+        # ★修正: attention_maskも連結が必要な場合
+        if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
+            grpo_attn_mask = grpo_batch['attention_mask']
+            sft_attn_mask = sft_collated['attention_mask']
+            if grpo_attn_mask is not None and sft_attn_mask is not None:
+                grpo_batch['attention_mask'] = torch.cat([grpo_attn_mask, sft_attn_mask], dim=1)
         
         # CHORDメタデータを追加
         grpo_batch['_chord_mu'] = chord_mu
