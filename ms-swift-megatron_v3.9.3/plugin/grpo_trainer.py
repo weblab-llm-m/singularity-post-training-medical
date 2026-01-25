@@ -1847,9 +1847,23 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         context = torch.no_grad() if no_grad else nullcontext()
         with context:
             output_tensor = forward_step_helper(model, data)
-        packed_seq_params = data['packed_seq_params']
-        data['logps'] = None if labels is None else self.get_logps(
-            output_tensor, labels, data['packed_seq_params'], packed_seq_params.num_samples, per_token=per_token)
+        
+        # ★修正: packed_seq_paramsが存在しない場合の処理
+        packed_seq_params = data.get('packed_seq_params')  # []からget()に変更
+        
+        if labels is None:
+            data['logps'] = None
+        elif packed_seq_params is not None:
+            # padding_free=true の場合
+            data['logps'] = self.get_logps(
+                output_tensor, labels, packed_seq_params, 
+                packed_seq_params.num_samples, per_token=per_token)
+        else:
+            # ★追加: padding_free=false の場合
+            num_samples = data.get('num_samples', labels.shape[0])
+            data['logps'] = self.get_logps(
+                output_tensor, labels, None, num_samples, per_token=per_token)
+        
         return data
 
     @contextmanager
