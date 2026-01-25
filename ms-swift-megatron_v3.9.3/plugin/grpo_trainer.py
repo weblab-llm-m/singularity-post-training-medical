@@ -399,10 +399,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if grpo_position_ids is not None:
                     grpo_position_ids = F.pad(grpo_position_ids, (0, grpo_pad_len), value=0)
             
-            # ★修正: grpo_attnの実際のサイズをチェック
-            if grpo_attn is not None and grpo_attn.shape[-1] < max_seq_len:
-                grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[-1]), value=0)
-            
             # SFTテンソルをパディング
             sft_pad_len = max_seq_len - sft_seq_len
             if sft_pad_len > 0:
@@ -411,9 +407,22 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if sft_position_ids is not None:
                     sft_position_ids = F.pad(sft_position_ids, (0, sft_pad_len), value=0)
             
-            # ★修正: sft_attnの実際のサイズをチェック
-            if sft_attn is not None and sft_attn.shape[-1] < max_seq_len:
-                sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[-1]), value=0)
+            # ★修正: attention_maskを必ずmax_seq_lenに揃える（条件分岐の外で処理）
+            if grpo_attn is not None:
+                grpo_attn_len = grpo_attn.shape[-1]
+                if grpo_attn_len != max_seq_len:
+                    if grpo_attn_len < max_seq_len:
+                        grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn_len), value=0)
+                    else:
+                        grpo_attn = grpo_attn[..., :max_seq_len]
+            
+            if sft_attn is not None:
+                sft_attn_len = sft_attn.shape[-1]
+                if sft_attn_len != max_seq_len:
+                    if sft_attn_len < max_seq_len:
+                        sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn_len), value=0)
+                    else:
+                        sft_attn = sft_attn[..., :max_seq_len]
             
             # completion_maskはパディング後のsft_labelsから計算
             sft_completion_mask = (sft_labels != -100)
@@ -427,6 +436,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=0)
             else:
                 merged_position_ids = None
+            
+            # ★修正: attention_mask連結前にサイズ確認のassertを追加（デバッグ用）
+            if grpo_attn is not None and sft_attn is not None:
+                assert grpo_attn.shape[-1] == sft_attn.shape[-1], \
+                    f"attention_mask size mismatch: grpo={grpo_attn.shape}, sft={sft_attn.shape}, max_seq_len={max_seq_len}"
+                merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
+            else:
+                merged_attention_mask = None
             
             # attention_mask連結
             if grpo_attn is not None and sft_attn is not None:
