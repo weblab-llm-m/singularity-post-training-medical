@@ -198,7 +198,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
           --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 1 \
+          --pipeline_model_parallel_size 8 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
@@ -233,7 +233,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --no_save_rng \
           --log_completions false \
           --attention_backend flash \
-          --padding_free true \
+          --padding_free false \
           --save '${OUTPUT_DIR}' \
           --no_save_optim \
           --no_save_rng \
