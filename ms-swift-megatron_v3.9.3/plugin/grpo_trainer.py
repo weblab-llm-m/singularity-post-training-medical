@@ -377,41 +377,50 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             
         else:
             # 非padding-freeモード
-            grpo_token_count = grpo_input_ids.shape[1]
-            sft_token_count = sft_labels.shape[1]
+            grpo_seq_len = grpo_input_ids.shape[1]
+            sft_seq_len = sft_labels.shape[1]
+            max_seq_len = max(grpo_seq_len, sft_seq_len)
             
-            # シーケンス長を揃える
-            max_seq_len = max(grpo_token_count, sft_token_count)
-            
-            # ★修正: pad_token_idを取得
+            # pad_token_idを取得
             pad_token_id = self.template.tokenizer.pad_token_id
             if pad_token_id is None:
                 pad_token_id = 0
             
-            # GRPOをパディング（必要な場合）
-            if grpo_token_count < max_seq_len:
-                pad_len = max_seq_len - grpo_token_count
-                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=pad_token_id)
-                grpo_labels = F.pad(grpo_labels, (0, pad_len), value=-100)
-                grpo_completion_mask = F.pad(grpo_completion_mask, (0, pad_len), value=False)
-                if grpo_position_ids is not None:
-                    grpo_position_ids = F.pad(grpo_position_ids, (0, pad_len), value=0)
-                if grpo_advantages.dim() == 2:
-                    grpo_advantages = F.pad(grpo_advantages, (0, pad_len), value=0.0)
+            # ★すべてのテンソルをmax_seq_lenにパディング
+            def pad_to_max(tensor, pad_value, dim=1):
+                if tensor is None:
+                    return None
+                current_len = tensor.shape[dim]
+                if current_len < max_seq_len:
+                    pad_size = max_seq_len - current_len
+                    return F.pad(tensor, (0, pad_size), value=pad_value)
+                return tensor
             
-            # SFTをパディング（必要な場合）
-            if sft_token_count < max_seq_len:
-                pad_len = max_seq_len - sft_token_count
-                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=pad_token_id)
-                sft_labels = F.pad(sft_labels, (0, pad_len), value=-100)
-                if sft_position_ids is not None:
-                    sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
+            # GRPOテンソルをパディング
+            grpo_input_ids = pad_to_max(grpo_input_ids, pad_token_id)
+            grpo_labels = pad_to_max(grpo_labels, -100)
+            grpo_completion_mask = pad_to_max(grpo_completion_mask, False)
+            grpo_position_ids = pad_to_max(grpo_position_ids, 0)
+            grpo_truncated_mask = grpo_batch['truncated_mask']
+            grpo_truncated_mask = pad_to_max(grpo_truncated_mask, False)
+            
+            # SFTテンソルをパディング
+            sft_input_ids = pad_to_max(sft_input_ids, pad_token_id)
+            sft_labels = pad_to_max(sft_labels, -100)
+            sft_position_ids = pad_to_max(sft_position_ids, 0)
+            sft_completion_mask = (sft_labels != -100)
+            
+            # GRPOのattention_maskをパディング
+            grpo_attn = grpo_batch.get('attention_mask')
+            grpo_attn = pad_to_max(grpo_attn, 0)
+            
+            # SFTのattention_maskをパディング
+            sft_attn = sft_collated.get('attention_mask')
+            sft_attn = pad_to_max(sft_attn, 0)
             
             # バッチ次元で連結（dim=0）
             merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=0)
             merged_labels = torch.cat([grpo_labels, sft_labels], dim=0)
-            
-            sft_completion_mask = (sft_labels != -100)
             merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=0)
             
             if grpo_position_ids is not None and sft_position_ids is not None:
@@ -419,57 +428,41 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # advantagesの形状を確認して適切に連結
-            if grpo_advantages.dim() == 2:
-                sft_advantages = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=grpo_advantages.dtype)
-                merged_advantages = torch.cat([grpo_advantages, sft_advantages], dim=0)
-            else:
-                sft_advantages = torch.zeros(sft_token_count, device=self.device, dtype=grpo_advantages.dtype)
-                merged_advantages = torch.cat([grpo_advantages, sft_advantages])
-            
-            # truncated_maskの形状を確認
-            grpo_truncated_mask = grpo_batch['truncated_mask']
-            if grpo_truncated_mask.dim() == 2:
-                if grpo_truncated_mask.shape[1] < max_seq_len:
-                    grpo_truncated_mask = F.pad(grpo_truncated_mask, (0, max_seq_len - grpo_truncated_mask.shape[1]), value=False)
-                sft_truncated_mask = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=torch.bool)
-                merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=0)
-            else:
-                sft_truncated_mask = torch.zeros((1, max_seq_len), device=self.device, dtype=torch.bool)
-                merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=1)
-            
-            # seq_lengthsの連結
-            if grpo_seq_lengths.dim() == 0:
-                grpo_seq_lengths = grpo_seq_lengths.unsqueeze(0)
-            sft_seq_lengths = torch.tensor([sft_token_count] * num_sft_samples, device=self.device)
-            merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
-            
-            merged_packed = None
-            
-            # ★追加: attention_maskもここで処理
-            if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
-                grpo_attn = grpo_batch['attention_mask']
-                sft_attn = sft_collated['attention_mask']
-                if grpo_attn is not None and sft_attn is not None:
-                    # シーケンス長を揃える
-                    if grpo_attn.shape[1] < max_seq_len:
-                        grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[1]), value=0)
-                    if sft_attn.shape[1] < max_seq_len:
-                        sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[1]), value=0)
-                    merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
-                else:
-                    merged_attention_mask = None
+            # attention_mask
+            if grpo_attn is not None and sft_attn is not None:
+                merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
             else:
                 merged_attention_mask = None
             
-            # grpo_token_countをmax_seq_lenに更新
+            # advantages
+            grpo_advantages = grpo_batch['advantages']
+            if grpo_advantages.dim() == 2:
+                grpo_advantages = pad_to_max(grpo_advantages, 0.0)
+                sft_advantages = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=grpo_advantages.dtype)
+                merged_advantages = torch.cat([grpo_advantages, sft_advantages], dim=0)
+            else:
+                sft_advantages = torch.zeros(max_seq_len * num_sft_samples, device=self.device, dtype=grpo_advantages.dtype)
+                merged_advantages = torch.cat([grpo_advantages, sft_advantages])
+            
+            # truncated_mask
+            sft_truncated_mask = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=torch.bool)
+            merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=0)
+            
+            # seq_lengths
+            grpo_seq_lengths = grpo_batch['seq_lengths']
+            if grpo_seq_lengths.dim() == 0:
+                grpo_seq_lengths = grpo_seq_lengths.unsqueeze(0)
+            sft_seq_lengths = torch.tensor([sft_seq_len] * num_sft_samples, device=self.device)
+            merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
+            
+            merged_packed = None
             grpo_token_count = max_seq_len
-        
-        # 新しい辞書を作成して返す
+
+        # 新しい辞書を作成
         merged_batch = {}
         for k, v in grpo_batch.items():
             merged_batch[k] = v
-        
+
         merged_batch['labels'] = merged_labels
         merged_batch['input_ids'] = merged_input_ids
         merged_batch['completion_mask'] = merged_completion_mask
@@ -478,27 +471,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         merged_batch['seq_lengths'] = merged_seq_lengths
         merged_batch['packed_seq_params'] = merged_packed
         merged_batch['num_samples'] = num_grpo_samples + num_sft_samples
-        
+
         if merged_position_ids is not None:
             if 'text_position_ids' in grpo_batch:
                 merged_batch['text_position_ids'] = merged_position_ids
             else:
                 merged_batch['position_ids'] = merged_position_ids
-        
-        # attention_mask
-        if grpo_packed is not None and sft_packed is not None:
-            # padding-freeモードのattention_mask処理（既存）
-            if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
-                grpo_attn = grpo_batch['attention_mask']
-                sft_attn = sft_collated['attention_mask']
-                if grpo_attn is not None and sft_attn is not None:
-                    grpo_attn_actual = grpo_attn[:, :grpo_token_count]
-                    sft_attn_actual = sft_attn[:, :sft_token_count]
-                    merged_batch['attention_mask'] = torch.cat([grpo_attn_actual, sft_attn_actual], dim=1)
-        else:
-            # 非padding-freeモードのattention_mask（上で計算済み）
-            if merged_attention_mask is not None:
-                merged_batch['attention_mask'] = merged_attention_mask
+
+        if merged_attention_mask is not None:
+            merged_batch['attention_mask'] = merged_attention_mask
         
         # CHORDメタデータを追加
         merged_batch['_chord_mu'] = chord_mu
