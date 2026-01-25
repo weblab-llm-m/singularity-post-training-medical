@@ -14,6 +14,7 @@ import json
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from accelerate.utils import broadcast_object_list
 from dacite import from_dict
 from megatron.core import mpu
@@ -379,6 +380,28 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             grpo_token_count = grpo_input_ids.shape[1]
             sft_token_count = sft_labels.shape[1]
             
+            # ★追加: シーケンス長を揃える
+            max_seq_len = max(grpo_token_count, sft_token_count)
+            
+            # GRPOをパディング（必要な場合）
+            if grpo_token_count < max_seq_len:
+                pad_len = max_seq_len - grpo_token_count
+                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=self.tokenizer.pad_token_id)
+                grpo_labels = F.pad(grpo_labels, (0, pad_len), value=-100)
+                grpo_completion_mask = F.pad(grpo_completion_mask, (0, pad_len), value=False)
+                if grpo_position_ids is not None:
+                    grpo_position_ids = F.pad(grpo_position_ids, (0, pad_len), value=0)
+                if grpo_advantages.dim() == 2:
+                    grpo_advantages = F.pad(grpo_advantages, (0, pad_len), value=0.0)
+            
+            # SFTをパディング（必要な場合）
+            if sft_token_count < max_seq_len:
+                pad_len = max_seq_len - sft_token_count
+                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=self.tokenizer.pad_token_id)
+                sft_labels = F.pad(sft_labels, (0, pad_len), value=-100)
+                if sft_position_ids is not None:
+                    sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
+            
             # バッチ次元で連結（dim=0）
             merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=0)
             merged_labels = torch.cat([grpo_labels, sft_labels], dim=0)
@@ -391,34 +414,35 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # ★修正: advantagesの形状を確認して適切に連結
+            # advantagesの形状を確認して適切に連結
             if grpo_advantages.dim() == 2:
-                # [batch, seq_len] の場合
-                sft_advantages = torch.zeros_like(sft_labels, dtype=grpo_advantages.dtype)
+                sft_advantages = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=grpo_advantages.dtype)
                 merged_advantages = torch.cat([grpo_advantages, sft_advantages], dim=0)
             else:
-                # [total_tokens] の場合（padding_free=trueの場合の互換性）
                 sft_advantages = torch.zeros(sft_token_count, device=self.device, dtype=grpo_advantages.dtype)
                 merged_advantages = torch.cat([grpo_advantages, sft_advantages])
             
-            # ★修正: truncated_maskの形状を確認
+            # truncated_maskの形状を確認
             grpo_truncated_mask = grpo_batch['truncated_mask']
-            if grpo_truncated_mask.dim() == 2 and grpo_truncated_mask.shape[0] == num_grpo_samples:
-                # [batch, seq_len] の場合
-                sft_truncated_mask = torch.zeros((num_sft_samples, sft_token_count), device=self.device, dtype=torch.bool)
+            if grpo_truncated_mask.dim() == 2:
+                if grpo_truncated_mask.shape[1] < max_seq_len:
+                    grpo_truncated_mask = F.pad(grpo_truncated_mask, (0, max_seq_len - grpo_truncated_mask.shape[1]), value=False)
+                sft_truncated_mask = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=torch.bool)
                 merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=0)
             else:
-                # [1, total_tokens] の場合
-                sft_truncated_mask = torch.zeros((1, sft_token_count), device=self.device, dtype=torch.bool)
+                sft_truncated_mask = torch.zeros((1, max_seq_len), device=self.device, dtype=torch.bool)
                 merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=1)
             
-            # ★修正: seq_lengthsの連結
+            # seq_lengthsの連結
             if grpo_seq_lengths.dim() == 0:
                 grpo_seq_lengths = grpo_seq_lengths.unsqueeze(0)
             sft_seq_lengths = torch.tensor([sft_token_count] * num_sft_samples, device=self.device)
             merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
             
-            merged_packed = None  # 非padding-freeモードではNone
+            merged_packed = None
+            
+            # ★更新: grpo_token_countをmax_seq_lenに更新
+            grpo_token_count = max_seq_len
         
         # 新しい辞書を作成して返す
         merged_batch = {}
