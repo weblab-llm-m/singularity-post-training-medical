@@ -388,6 +388,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_seq_len = sft_input_ids.shape[1]
             max_seq_len = max(grpo_seq_len, sft_seq_len)
             
+            # デバッグログ
+            logger.debug(f"[CHORD] grpo_seq_len={grpo_seq_len}, sft_seq_len={sft_seq_len}, max_seq_len={max_seq_len}")
+            
             # pad_token_idを取得
             pad_token_id = self.template.tokenizer.pad_token_id
             if pad_token_id is None:
@@ -398,6 +401,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_attn = sft_collated.get('attention_mask')
             grpo_truncated_mask = grpo_batch['truncated_mask']
             grpo_advantages = grpo_batch['advantages']
+            
+            # デバッグログ
+            if grpo_attn is not None:
+                logger.debug(f"[CHORD] grpo_attn.shape={grpo_attn.shape}")
+            if sft_attn is not None:
+                logger.debug(f"[CHORD] sft_attn.shape (before padding)={sft_attn.shape}")
             
             # ========== GRPOテンソルをmax_seq_lenにパディング ==========
             if grpo_seq_len < max_seq_len:
@@ -416,22 +425,30 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if sft_position_ids is not None:
                     sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
             
-            # ========== ★修正: attention_maskは実際のサイズでパディング ==========
+            # ========== ★重要: attention_maskを必ずmax_seq_lenに揃える ==========
+            # GRPOのattention_mask
             if grpo_attn is not None:
                 grpo_attn_len = grpo_attn.shape[-1]
+                logger.debug(f"[CHORD] grpo_attn_len={grpo_attn_len}, max_seq_len={max_seq_len}")
                 if grpo_attn_len < max_seq_len:
                     grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn_len), value=0)
+                    logger.debug(f"[CHORD] grpo_attn padded to {grpo_attn.shape}")
                 elif grpo_attn_len > max_seq_len:
                     grpo_attn = grpo_attn[..., :max_seq_len]
+                    logger.debug(f"[CHORD] grpo_attn truncated to {grpo_attn.shape}")
             
+            # SFTのattention_mask
             if sft_attn is not None:
                 sft_attn_len = sft_attn.shape[-1]
+                logger.debug(f"[CHORD] sft_attn_len={sft_attn_len}, max_seq_len={max_seq_len}")
                 if sft_attn_len < max_seq_len:
                     sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn_len), value=0)
+                    logger.debug(f"[CHORD] sft_attn padded to {sft_attn.shape}")
                 elif sft_attn_len > max_seq_len:
                     sft_attn = sft_attn[..., :max_seq_len]
+                    logger.debug(f"[CHORD] sft_attn truncated to {sft_attn.shape}")
             
-            # ========== ★修正: truncated_maskも実際のサイズでパディング ==========
+            # ========== truncated_maskをmax_seq_lenに揃える ==========
             if grpo_truncated_mask is not None:
                 grpo_trunc_len = grpo_truncated_mask.shape[-1]
                 if grpo_trunc_len < max_seq_len:
@@ -439,7 +456,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 elif grpo_trunc_len > max_seq_len:
                     grpo_truncated_mask = grpo_truncated_mask[..., :max_seq_len]
             
-            # ========== ★修正: advantagesも実際のサイズでパディング ==========
+            # ========== advantagesをmax_seq_lenに揃える ==========
             if grpo_advantages.dim() == 2:
                 grpo_adv_len = grpo_advantages.shape[-1]
                 if grpo_adv_len < max_seq_len:
@@ -460,8 +477,18 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # ========== attention_mask連結 ==========
+            # ========== attention_mask連結（最終確認付き） ==========
             if grpo_attn is not None and sft_attn is not None:
+                # 最終サイズ確認
+                logger.debug(f"[CHORD] Final: grpo_attn.shape={grpo_attn.shape}, sft_attn.shape={sft_attn.shape}")
+                if grpo_attn.shape[-1] != sft_attn.shape[-1]:
+                    # 強制的に揃える（フォールバック）
+                    logger.warning(f"[CHORD] Size mismatch! grpo_attn={grpo_attn.shape[-1]}, sft_attn={sft_attn.shape[-1]}, max_seq_len={max_seq_len}")
+                    target_len = max(grpo_attn.shape[-1], sft_attn.shape[-1])
+                    if grpo_attn.shape[-1] < target_len:
+                        grpo_attn = F.pad(grpo_attn, (0, target_len - grpo_attn.shape[-1]), value=0)
+                    if sft_attn.shape[-1] < target_len:
+                        sft_attn = F.pad(sft_attn, (0, target_len - sft_attn.shape[-1]), value=0)
                 merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
             else:
                 merged_attention_mask = None
@@ -471,7 +498,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 sft_advantages = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=grpo_advantages.dtype)
                 merged_advantages = torch.cat([grpo_advantages, sft_advantages], dim=0)
             else:
-                # 1次元の場合
                 grpo_adv_len = grpo_advantages.shape[0]
                 expected_len = max_seq_len * num_grpo_samples
                 if grpo_adv_len < expected_len:
