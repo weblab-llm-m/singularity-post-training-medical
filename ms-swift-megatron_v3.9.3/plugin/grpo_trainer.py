@@ -378,7 +378,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         else:
             # 非padding-freeモード
             grpo_seq_len = grpo_input_ids.shape[1]
-            sft_seq_len = sft_labels.shape[1]
+            sft_seq_len = sft_input_ids.shape[1]  # ★sft_labelsではなくsft_input_idsから取得
             max_seq_len = max(grpo_seq_len, sft_seq_len)
             
             # pad_token_idを取得
@@ -386,22 +386,30 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             if pad_token_id is None:
                 pad_token_id = 0
             
+            # ★attention_maskを先に取得
+            grpo_attn = grpo_batch.get('attention_mask')
+            sft_attn = sft_collated.get('attention_mask')
+            
             # GRPOテンソルをパディング
-            if grpo_seq_len < max_seq_len:
-                pad_len = max_seq_len - grpo_seq_len
-                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=pad_token_id)
-                grpo_labels = F.pad(grpo_labels, (0, pad_len), value=-100)
-                grpo_completion_mask = F.pad(grpo_completion_mask, (0, pad_len), value=False)
+            grpo_pad_len = max_seq_len - grpo_seq_len
+            if grpo_pad_len > 0:
+                grpo_input_ids = F.pad(grpo_input_ids, (0, grpo_pad_len), value=pad_token_id)
+                grpo_labels = F.pad(grpo_labels, (0, grpo_pad_len), value=-100)
+                grpo_completion_mask = F.pad(grpo_completion_mask, (0, grpo_pad_len), value=False)
                 if grpo_position_ids is not None:
-                    grpo_position_ids = F.pad(grpo_position_ids, (0, pad_len), value=0)
+                    grpo_position_ids = F.pad(grpo_position_ids, (0, grpo_pad_len), value=0)
+                if grpo_attn is not None:
+                    grpo_attn = F.pad(grpo_attn, (0, grpo_pad_len), value=0)
             
             # SFTテンソルをパディング
-            if sft_seq_len < max_seq_len:
-                pad_len = max_seq_len - sft_seq_len
-                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=pad_token_id)
-                sft_labels = F.pad(sft_labels, (0, pad_len), value=-100)
+            sft_pad_len = max_seq_len - sft_seq_len
+            if sft_pad_len > 0:
+                sft_input_ids = F.pad(sft_input_ids, (0, sft_pad_len), value=pad_token_id)
+                sft_labels = F.pad(sft_labels, (0, sft_pad_len), value=-100)
                 if sft_position_ids is not None:
-                    sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
+                    sft_position_ids = F.pad(sft_position_ids, (0, sft_pad_len), value=0)
+                if sft_attn is not None:
+                    sft_attn = F.pad(sft_attn, (0, sft_pad_len), value=0)
             
             # completion_maskはパディング後のsft_labelsから計算
             sft_completion_mask = (sft_labels != -100)
@@ -416,17 +424,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # ★修正: attention_maskを明示的にパディング
-            grpo_attn = grpo_batch.get('attention_mask')
-            sft_attn = sft_collated.get('attention_mask')
-            
+            # attention_mask連結
             if grpo_attn is not None and sft_attn is not None:
-                # GRPOのattention_maskをパディング
-                if grpo_attn.shape[1] < max_seq_len:
-                    grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[1]), value=0)
-                # SFTのattention_maskをパディング
-                if sft_attn.shape[1] < max_seq_len:
-                    sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[1]), value=0)
                 merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
             else:
                 merged_attention_mask = None
