@@ -376,17 +376,22 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             grpo_token_count = grpo_expected_tokens
             
         else:
-            # ★修正: 非padding-freeモード
+            # 非padding-freeモード
             grpo_token_count = grpo_input_ids.shape[1]
             sft_token_count = sft_labels.shape[1]
             
-            # ★追加: シーケンス長を揃える
+            # シーケンス長を揃える
             max_seq_len = max(grpo_token_count, sft_token_count)
+            
+            # ★修正: pad_token_idを取得
+            pad_token_id = self.template.tokenizer.pad_token_id
+            if pad_token_id is None:
+                pad_token_id = 0
             
             # GRPOをパディング（必要な場合）
             if grpo_token_count < max_seq_len:
                 pad_len = max_seq_len - grpo_token_count
-                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=self.tokenizer.pad_token_id)
+                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=pad_token_id)
                 grpo_labels = F.pad(grpo_labels, (0, pad_len), value=-100)
                 grpo_completion_mask = F.pad(grpo_completion_mask, (0, pad_len), value=False)
                 if grpo_position_ids is not None:
@@ -397,7 +402,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # SFTをパディング（必要な場合）
             if sft_token_count < max_seq_len:
                 pad_len = max_seq_len - sft_token_count
-                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=self.tokenizer.pad_token_id)
+                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=pad_token_id)
                 sft_labels = F.pad(sft_labels, (0, pad_len), value=-100)
                 if sft_position_ids is not None:
                     sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
