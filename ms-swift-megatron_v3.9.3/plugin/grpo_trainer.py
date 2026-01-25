@@ -378,7 +378,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         else:
             # 非padding-freeモード
             grpo_seq_len = grpo_input_ids.shape[1]
-            sft_seq_len = sft_input_ids.shape[1]  # ★sft_labelsではなくsft_input_idsから取得
+            sft_seq_len = sft_input_ids.shape[1]
             max_seq_len = max(grpo_seq_len, sft_seq_len)
             
             # pad_token_idを取得
@@ -386,7 +386,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             if pad_token_id is None:
                 pad_token_id = 0
             
-            # ★attention_maskを先に取得
+            # attention_maskを先に取得
             grpo_attn = grpo_batch.get('attention_mask')
             sft_attn = sft_collated.get('attention_mask')
             
@@ -398,8 +398,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 grpo_completion_mask = F.pad(grpo_completion_mask, (0, grpo_pad_len), value=False)
                 if grpo_position_ids is not None:
                     grpo_position_ids = F.pad(grpo_position_ids, (0, grpo_pad_len), value=0)
-                if grpo_attn is not None:
-                    grpo_attn = F.pad(grpo_attn, (0, grpo_pad_len), value=0)
+            
+            # ★修正: grpo_attnの実際のサイズをチェック
+            if grpo_attn is not None and grpo_attn.shape[-1] < max_seq_len:
+                grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[-1]), value=0)
             
             # SFTテンソルをパディング
             sft_pad_len = max_seq_len - sft_seq_len
@@ -408,8 +410,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 sft_labels = F.pad(sft_labels, (0, sft_pad_len), value=-100)
                 if sft_position_ids is not None:
                     sft_position_ids = F.pad(sft_position_ids, (0, sft_pad_len), value=0)
-                if sft_attn is not None:
-                    sft_attn = F.pad(sft_attn, (0, sft_pad_len), value=0)
+            
+            # ★修正: sft_attnの実際のサイズをチェック
+            if sft_attn is not None and sft_attn.shape[-1] < max_seq_len:
+                sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[-1]), value=0)
             
             # completion_maskはパディング後のsft_labelsから計算
             sft_completion_mask = (sft_labels != -100)
