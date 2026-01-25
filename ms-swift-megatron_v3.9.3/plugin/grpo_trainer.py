@@ -386,37 +386,25 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             if pad_token_id is None:
                 pad_token_id = 0
             
-            # ★すべてのテンソルをmax_seq_lenにパディング
-            def pad_to_max(tensor, pad_value, dim=1):
-                if tensor is None:
-                    return None
-                current_len = tensor.shape[dim]
-                if current_len < max_seq_len:
-                    pad_size = max_seq_len - current_len
-                    return F.pad(tensor, (0, pad_size), value=pad_value)
-                return tensor
-            
             # GRPOテンソルをパディング
-            grpo_input_ids = pad_to_max(grpo_input_ids, pad_token_id)
-            grpo_labels = pad_to_max(grpo_labels, -100)
-            grpo_completion_mask = pad_to_max(grpo_completion_mask, False)
-            grpo_position_ids = pad_to_max(grpo_position_ids, 0)
-            grpo_truncated_mask = grpo_batch['truncated_mask']
-            grpo_truncated_mask = pad_to_max(grpo_truncated_mask, False)
+            if grpo_seq_len < max_seq_len:
+                pad_len = max_seq_len - grpo_seq_len
+                grpo_input_ids = F.pad(grpo_input_ids, (0, pad_len), value=pad_token_id)
+                grpo_labels = F.pad(grpo_labels, (0, pad_len), value=-100)
+                grpo_completion_mask = F.pad(grpo_completion_mask, (0, pad_len), value=False)
+                if grpo_position_ids is not None:
+                    grpo_position_ids = F.pad(grpo_position_ids, (0, pad_len), value=0)
             
             # SFTテンソルをパディング
-            sft_input_ids = pad_to_max(sft_input_ids, pad_token_id)
-            sft_labels = pad_to_max(sft_labels, -100)
-            sft_position_ids = pad_to_max(sft_position_ids, 0)
+            if sft_seq_len < max_seq_len:
+                pad_len = max_seq_len - sft_seq_len
+                sft_input_ids = F.pad(sft_input_ids, (0, pad_len), value=pad_token_id)
+                sft_labels = F.pad(sft_labels, (0, pad_len), value=-100)
+                if sft_position_ids is not None:
+                    sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
+            
+            # completion_maskはパディング後のsft_labelsから計算
             sft_completion_mask = (sft_labels != -100)
-            
-            # GRPOのattention_maskをパディング
-            grpo_attn = grpo_batch.get('attention_mask')
-            grpo_attn = pad_to_max(grpo_attn, 0)
-            
-            # SFTのattention_maskをパディング
-            sft_attn = sft_collated.get('attention_mask')
-            sft_attn = pad_to_max(sft_attn, 0)
             
             # バッチ次元で連結（dim=0）
             merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=0)
@@ -428,8 +416,17 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # attention_mask
+            # ★修正: attention_maskを明示的にパディング
+            grpo_attn = grpo_batch.get('attention_mask')
+            sft_attn = sft_collated.get('attention_mask')
+            
             if grpo_attn is not None and sft_attn is not None:
+                # GRPOのattention_maskをパディング
+                if grpo_attn.shape[1] < max_seq_len:
+                    grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[1]), value=0)
+                # SFTのattention_maskをパディング
+                if sft_attn.shape[1] < max_seq_len:
+                    sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[1]), value=0)
                 merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
             else:
                 merged_attention_mask = None
@@ -437,7 +434,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # advantages
             grpo_advantages = grpo_batch['advantages']
             if grpo_advantages.dim() == 2:
-                grpo_advantages = pad_to_max(grpo_advantages, 0.0)
+                if grpo_advantages.shape[1] < max_seq_len:
+                    grpo_advantages = F.pad(grpo_advantages, (0, max_seq_len - grpo_advantages.shape[1]), value=0.0)
                 sft_advantages = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=grpo_advantages.dtype)
                 merged_advantages = torch.cat([grpo_advantages, sft_advantages], dim=0)
             else:
@@ -445,6 +443,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 merged_advantages = torch.cat([grpo_advantages, sft_advantages])
             
             # truncated_mask
+            grpo_truncated_mask = grpo_batch['truncated_mask']
+            if grpo_truncated_mask.shape[1] < max_seq_len:
+                grpo_truncated_mask = F.pad(grpo_truncated_mask, (0, max_seq_len - grpo_truncated_mask.shape[1]), value=False)
             sft_truncated_mask = torch.zeros((num_sft_samples, max_seq_len), device=self.device, dtype=torch.bool)
             merged_truncated_mask = torch.cat([grpo_truncated_mask, sft_truncated_mask], dim=0)
             
