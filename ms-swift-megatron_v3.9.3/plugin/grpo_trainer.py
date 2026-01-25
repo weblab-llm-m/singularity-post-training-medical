@@ -1425,7 +1425,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             k: v
             for k, v in batch.items() if k not in [
                 'completion_mask', 'advantages', 'truncated_mask', 'seq_lengths',
-                '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count'
+                '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count',
+                'attention_mask_2d'
             ]
         }
         if self.beta != 0.0:
@@ -1500,7 +1501,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             k: v for k, v in data.items() 
             if k not in ['completion_mask', 'ref_per_token_logps', 'advantages', 
                         'old_per_token_logps', 'truncated_mask', 'seq_lengths',
-                        '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count']
+                        '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count',
+                        'attention_mask_2d'
+                    ]
         }
 
         with self.stimer:
