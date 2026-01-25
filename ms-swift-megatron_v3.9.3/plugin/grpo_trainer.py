@@ -446,7 +446,23 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             
             merged_packed = None
             
-            # ★更新: grpo_token_countをmax_seq_lenに更新
+            # ★追加: attention_maskもここで処理
+            if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
+                grpo_attn = grpo_batch['attention_mask']
+                sft_attn = sft_collated['attention_mask']
+                if grpo_attn is not None and sft_attn is not None:
+                    # シーケンス長を揃える
+                    if grpo_attn.shape[1] < max_seq_len:
+                        grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn.shape[1]), value=0)
+                    if sft_attn.shape[1] < max_seq_len:
+                        sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn.shape[1]), value=0)
+                    merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
+                else:
+                    merged_attention_mask = None
+            else:
+                merged_attention_mask = None
+            
+            # grpo_token_countをmax_seq_lenに更新
             grpo_token_count = max_seq_len
         
         # 新しい辞書を作成して返す
@@ -470,26 +486,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 merged_batch['position_ids'] = merged_position_ids
         
         # attention_mask
-        if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
-            grpo_attn = grpo_batch['attention_mask']
-            sft_attn = sft_collated['attention_mask']
-            if grpo_attn is not None and sft_attn is not None:
-                if grpo_packed is not None and sft_packed is not None:
-                    # padding-freeモード
+        if grpo_packed is not None and sft_packed is not None:
+            # padding-freeモードのattention_mask処理（既存）
+            if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
+                grpo_attn = grpo_batch['attention_mask']
+                sft_attn = sft_collated['attention_mask']
+                if grpo_attn is not None and sft_attn is not None:
                     grpo_attn_actual = grpo_attn[:, :grpo_token_count]
                     sft_attn_actual = sft_attn[:, :sft_token_count]
                     merged_batch['attention_mask'] = torch.cat([grpo_attn_actual, sft_attn_actual], dim=1)
-                else:
-                    # ★修正: 非padding-freeモード - シーケンス長を揃える
-                    grpo_attn_len = grpo_attn.shape[1]
-                    sft_attn_len = sft_attn.shape[1]
-                    
-                    if grpo_attn_len < max_seq_len:
-                        grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn_len), value=0)
-                    if sft_attn_len < max_seq_len:
-                        sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn_len), value=0)
-                    
-                    merged_batch['attention_mask'] = torch.cat([grpo_attn, sft_attn], dim=0)
+        else:
+            # 非padding-freeモードのattention_mask（上で計算済み）
+            if merged_attention_mask is not None:
+                merged_batch['attention_mask'] = merged_attention_mask
         
         # CHORDメタデータを追加
         merged_batch['_chord_mu'] = chord_mu
