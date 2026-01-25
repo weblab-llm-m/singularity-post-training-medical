@@ -469,7 +469,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_batch['position_ids'] = merged_position_ids
         
-        # ★修正: attention_mask処理
+        # attention_mask
         if 'attention_mask' in grpo_batch and 'attention_mask' in sft_collated:
             grpo_attn = grpo_batch['attention_mask']
             sft_attn = sft_collated['attention_mask']
@@ -480,7 +480,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     sft_attn_actual = sft_attn[:, :sft_token_count]
                     merged_batch['attention_mask'] = torch.cat([grpo_attn_actual, sft_attn_actual], dim=1)
                 else:
-                    # 非padding-freeモード: バッチ次元で連結
+                    # ★修正: 非padding-freeモード - シーケンス長を揃える
+                    grpo_attn_len = grpo_attn.shape[1]
+                    sft_attn_len = sft_attn.shape[1]
+                    
+                    if grpo_attn_len < max_seq_len:
+                        grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn_len), value=0)
+                    if sft_attn_len < max_seq_len:
+                        sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn_len), value=0)
+                    
                     merged_batch['attention_mask'] = torch.cat([grpo_attn, sft_attn], dim=0)
         
         # CHORDメタデータを追加
