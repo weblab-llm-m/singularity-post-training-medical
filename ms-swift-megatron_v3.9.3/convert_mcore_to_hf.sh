@@ -22,10 +22,9 @@ SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 HF_CACHE=${HF_CACHE:-${SWIFT_WORKDIR}/.cache_home}
 
 # ===== 元モデルパス（HF形式のconfig.jsonが必要）=====
-# ★★★ 追加：元のモデルパスを指定 ★★★
 LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-$HOME/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
 
-# ===== 変換対象のチェックポイント =====
+# ===== 変換対象のチェックポイント ！！！！ここを変更する！！！！=====
 MCORE_CHECKPOINT_DIR=${MCORE_CHECKPOINT_DIR:-"$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v70-20260126-010259"}
 
 # ===== 出力先 =====
@@ -123,6 +122,7 @@ singularity exec --nv --cleanenv \
     NPROC_PER_NODE=8 \
     megatron export \
       --model '${LOCAL_MODEL_PATH}' \
+      --model_type qwen3_next \
       --load '${MCORE_CHECKPOINT_DIR}' \
       --save '${OUTPUT_HF_DIR}' \
       --to_hf true \
