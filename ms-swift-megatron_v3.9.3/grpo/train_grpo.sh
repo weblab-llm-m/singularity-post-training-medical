@@ -2,7 +2,7 @@
 #SBATCH --job-name=grpo_learn
 #SBATCH --partition=P08317
 #SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[28-35]
+#SBATCH --nodelist=osk-gpu[61-68]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -172,7 +172,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --reward_funcs ophtho chinese \
           --reward_weights 1.5 1.0 \
           --soft_cache_length 1024 \
-          --max_epochs 5 \
+          --max_epochs 1 \
           --eval_interval 50 \
           --save_interval 50 \
           --sleep_level 1 \
