@@ -21,10 +21,12 @@ MEGATRON_LM_PATH=${MEGATRON_LM_PATH:-$SWIFT_WORKDIR/containers/megatron-lm-core_
 SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 HF_CACHE=${HF_CACHE:-${SWIFT_WORKDIR}/.cache_home}
 
+# ===== 元モデルパス（HF形式のconfig.jsonが必要）=====
+# ★★★ 追加：元のモデルパスを指定 ★★★
+LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-$HOME/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
+
 # ===== 変換対象のチェックポイント =====
-# iter_XXXXXXX フォルダの「親ディレクトリ」を指定
-# 例: /path/to/outputs/v29-20260118-182028 （この中にiter_0000050などがある）
-MCORE_CHECKPOINT_DIR=${MCORE_CHECKPOINT_DIR:-"$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v29-20260118-182028"}
+MCORE_CHECKPOINT_DIR=${MCORE_CHECKPOINT_DIR:-"$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v70-20260126-010259"}
 
 # ===== 出力先 =====
 OUTPUT_HF_DIR=${OUTPUT_HF_DIR:-"${MCORE_CHECKPOINT_DIR}-hf"}
@@ -32,7 +34,7 @@ OUTPUT_HF_DIR=${OUTPUT_HF_DIR:-"${MCORE_CHECKPOINT_DIR}-hf"}
 # ===== データ型 =====
 TORCH_DTYPE=${TORCH_DTYPE:-bfloat16}
 
-# ===== 精度テスト（大規模モデルの場合はfalseを推奨、時間とメモリを節約） =====
+# ===== 精度テスト =====
 TEST_PRECISION=${TEST_PRECISION:-false}
 
 # ===== GPU数 =====
@@ -59,6 +61,21 @@ CUDA_HOME=${CUDA_HOME:-$(dirname "$(dirname "$(which nvcc)")")}
 echo "=== Checkpoint Information ==="
 echo "MCORE_CHECKPOINT_DIR: ${MCORE_CHECKPOINT_DIR}"
 echo "OUTPUT_HF_DIR: ${OUTPUT_HF_DIR}"
+echo "LOCAL_MODEL_PATH: ${LOCAL_MODEL_PATH}"
+
+# 元モデルの存在確認
+if [ -d "${LOCAL_MODEL_PATH}" ]; then
+    echo "✓ Original model found at: ${LOCAL_MODEL_PATH}"
+    if [ -f "${LOCAL_MODEL_PATH}/config.json" ]; then
+        echo "✓ config.json found"
+    else
+        echo "✗ WARNING: config.json NOT found in original model path"
+    fi
+else
+    echo "✗ ERROR: Original model NOT found at: ${LOCAL_MODEL_PATH}"
+    echo "Please set LOCAL_MODEL_PATH to the correct path"
+    exit 1
+fi
 
 if [ -f "${MCORE_CHECKPOINT_DIR}/latest_checkpointed_iteration.txt" ]; then
     CHECKPOINT_ITER=$(cat "${MCORE_CHECKPOINT_DIR}/latest_checkpointed_iteration.txt")
@@ -78,6 +95,7 @@ singularity exec --nv --cleanenv \
   -B "${SWIFT_WORKDIR}:${SWIFT_WORKDIR}" \
   -B "${MS_SWIFT_DIR}:${MS_SWIFT_DIR}" \
   -B "${MEGATRON_LM_PATH}:${MEGATRON_LM_PATH}" \
+  -B "${LOCAL_MODEL_PATH}:${LOCAL_MODEL_PATH}" \
   -B "/dev/shm:/dev/shm" \
   --home "${HF_CACHE}:/root" \
   --env HF_TOKEN="${HF_TOKEN}" \
@@ -100,9 +118,11 @@ singularity exec --nv --cleanenv \
     cd \"\${MS_SWIFT_DIR}\"
     
     # megatron export を使用した変換（Mcore-Bridge）
+    # ★★★ --model パラメータを追加 ★★★
     CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
     NPROC_PER_NODE=8 \
     megatron export \
+      --model '${LOCAL_MODEL_PATH}' \
       --load '${MCORE_CHECKPOINT_DIR}' \
       --save '${OUTPUT_HF_DIR}' \
       --to_hf true \
