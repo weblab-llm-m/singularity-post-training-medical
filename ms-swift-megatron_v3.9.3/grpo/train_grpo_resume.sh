@@ -212,6 +212,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
           --finetune false \
+          --no_load_optim false \
+          --no_load_rng false \
           --load ${CHECK_POINT_PATH} \
           --global_batch_size 512 \
           --micro_batch_size 1 \
