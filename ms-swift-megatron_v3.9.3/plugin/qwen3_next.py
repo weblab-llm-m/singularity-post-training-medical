@@ -435,8 +435,34 @@ class Qwen3NextGatedDeltaNet(MegatronModule, _Qwen3NextGatedDeltaNet):
         else:
             hidden_states = hidden_states.transpose(0, 1)
             attention_mask = kwargs.get('attention_mask')
+            # ★★★ v8修正: 2D/4D両方のattention_maskに対応 ★★★
+            # 背景:
+            #   - grpo_trainer.py (CHORD) が4D causal maskを渡す場合がある
+            #   - grpo_trainer.py (v7修正) が2D padding maskを渡す場合がある
+            #   - transformers側のapply_mask_to_padding_statesは2D maskを期待
+            # 
+            # 対応:
+            #   - 4D [batch, 1, seq_len, seq_len]: sum(dim=(1,3))で2Dに変換（元の処理）
+            #   - 2D [batch, seq_len]: そのままブール値に変換
+            #   - 3D [batch, 1, seq_len]: squeeze後にブール値に変換
             if attention_mask is not None:
-                attention_mask = attention_mask.sum(dim=(1, 3)) > 0
+                if attention_mask.ndim == 4:
+                    # 4D causal mask -> 2D padding mask
+                    # 元のコード: attention_mask.sum(dim=(1, 3)) > 0
+                    # 各位置が少なくとも1つの有効なattentionを持つかを確認
+                    attention_mask = attention_mask.sum(dim=(1, 3)) > 0
+                elif attention_mask.ndim == 2:
+                    # 既に2D padding mask、ブール値に変換
+                    attention_mask = attention_mask > 0
+                elif attention_mask.ndim == 3:
+                    # 3D [batch, 1, seq_len] の場合（まれに発生）
+                    attention_mask = attention_mask.squeeze(1) > 0
+                # attention_maskがNone以外の他の次元数の場合は警告
+                elif attention_mask.ndim not in [2, 3, 4]:
+                    logger.warning(
+                        f"[Qwen3NextGatedDeltaNet] Unexpected attention_mask.ndim={attention_mask.ndim}, "
+                        f"shape={attention_mask.shape}. Expected 2D, 3D, or 4D."
+                    )
         res = super().forward(hidden_states=hidden_states, attention_mask=attention_mask)
         if thd_format and not args.packing:
             res = res[attention_mask][:, None]
