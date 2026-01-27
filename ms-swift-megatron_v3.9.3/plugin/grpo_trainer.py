@@ -1785,7 +1785,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 grpo_advantages_aligned = grpo_advantages[-clamped_ratios.shape[1]:]
                 per_token_loss = -clamped_ratios * grpo_advantages_aligned.unsqueeze(0) * grpo_per_token_logps
             else:
-                raise NotImplementedError
+                # 非padding-freeモード: [batch, seq_len] 形式
+                # grpo_advantages を seq_len 次元に合わせてブロードキャスト
+                seq_len = grpo_per_token_logps.shape[-1]
+                if grpo_advantages.dim() == 1:
+                    grpo_advantages_aligned = grpo_advantages[-seq_len:].unsqueeze(0)
+                else:
+                    grpo_advantages_aligned = grpo_advantages[..., -seq_len:]
+                per_token_loss = -clamped_ratios * grpo_advantages_aligned * grpo_per_token_logps
         elif self.loss_type in ['grpo', 'bnpo', 'dr_grpo', 'dapo']:
             coef_2 = torch.clamp(coef_1, 1 - self.epsilon_low, 1 + self.epsilon_high)
             if self.args.delta is not None:
@@ -1800,7 +1807,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 per_token_loss1 = coef_1 * grpo_advantages_aligned.unsqueeze(0)
                 per_token_loss2 = coef_2 * grpo_advantages_aligned.unsqueeze(0)
             else:
-                raise NotImplementedError
+                # 非padding-freeモード: [batch, seq_len] 形式
+                seq_len = coef_1.shape[-1]
+                if grpo_advantages.dim() == 1:
+                    grpo_advantages_aligned = grpo_advantages[-seq_len:].unsqueeze(0)
+                else:
+                    grpo_advantages_aligned = grpo_advantages[..., -seq_len:]
+                per_token_loss1 = coef_1 * grpo_advantages_aligned
+                per_token_loss2 = coef_2 * grpo_advantages_aligned
             per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
         else:
             raise ValueError(f'Unknown loss type: {self.loss_type}')
