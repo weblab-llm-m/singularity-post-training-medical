@@ -51,6 +51,7 @@ cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swi
 # CHORDの学習を追加
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/grpo_trainer.py $HOME/swift-RL/containers/ms-swift/swift/megatron/trainers/grpo_trainer.py
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/megatron_args.py $HOME/swift-RL/containers/ms-swift/swift/megatron/argument/megatron_args.py
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
 ```
 
 # 4. Megatron-LM（training）を用意する。
