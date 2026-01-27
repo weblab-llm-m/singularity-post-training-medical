@@ -1702,6 +1702,45 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     ]
         }
 
+        # ★★★ Qwen3-Next対応: attention_maskを2Dに変換 ★★★
+        # Qwen3-Nextの apply_mask_to_padding_states は 2D mask [batch, seq_len] を期待
+        # 4D causal mask [batch, 1, seq_len, seq_len] が渡されると失敗する
+        if 'attention_mask' in inputs and inputs['attention_mask'] is not None:
+            attn_mask = inputs['attention_mask']
+            input_ids = inputs.get('input_ids')
+            
+            if attn_mask.ndim == 4:
+                # 4D -> 2D: input_idsからpadding maskを生成
+                # pad_token_id以外の位置を1とする
+                if input_ids is not None:
+                    pad_token_id = self.template.tokenizer.pad_token_id
+                    if pad_token_id is None:
+                        pad_token_id = 0
+                    # 2D attention_mask: padding以外の位置が1
+                    attn_mask_2d = (input_ids != pad_token_id).to(attn_mask.dtype)
+                    inputs['attention_mask'] = attn_mask_2d
+                    logger.debug(f"[forward_step] Converted 4D attention_mask to 2D: {attn_mask.shape} -> {attn_mask_2d.shape}")
+                else:
+                    # input_idsがない場合は4Dの対角成分から2Dを推定
+                    # [batch, 1, seq_len, seq_len] -> 対角がすべて1なら全部有効
+                    batch_size = attn_mask.shape[0]
+                    seq_len = attn_mask.shape[-1]
+                    attn_mask_2d = torch.ones(batch_size, seq_len, device=attn_mask.device, dtype=attn_mask.dtype)
+                    inputs['attention_mask'] = attn_mask_2d
+                    logger.debug(f"[forward_step] Created 2D attention_mask from 4D: shape={attn_mask_2d.shape}")
+            
+            elif attn_mask.ndim == 2:
+                # 2Dだが、input_idsとサイズが合っているか確認
+                if input_ids is not None and attn_mask.shape[1] != input_ids.shape[1]:
+                    logger.warning(f"[forward_step] attention_mask.shape[1]={attn_mask.shape[1]} != input_ids.shape[1]={input_ids.shape[1]}")
+                    # input_idsからpadding maskを再生成
+                    pad_token_id = self.template.tokenizer.pad_token_id
+                    if pad_token_id is None:
+                        pad_token_id = 0
+                    attn_mask_2d = (input_ids != pad_token_id).to(attn_mask.dtype)
+                    inputs['attention_mask'] = attn_mask_2d
+                    logger.info(f"[forward_step] Regenerated 2D attention_mask: shape={attn_mask_2d.shape}")
+
         with self.stimer:
             output_tensor = model(**inputs)
         
