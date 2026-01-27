@@ -386,27 +386,31 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # ========== 非padding-freeモード ==========
             grpo_seq_len = grpo_input_ids.shape[1]
             sft_seq_len = sft_input_ids.shape[1]
-            max_seq_len = max(grpo_seq_len, sft_seq_len)
             
-            # デバッグログ
-            logger.debug(f"[CHORD] grpo_seq_len={grpo_seq_len}, sft_seq_len={sft_seq_len}, max_seq_len={max_seq_len}")
-            
-            # pad_token_idを取得
-            pad_token_id = self.template.tokenizer.pad_token_id
-            if pad_token_id is None:
-                pad_token_id = 0
-            
-            # ========== すべてのテンソルを取得 ==========
+            # ★修正: attention_maskの長さも考慮してmax_seq_lenを決定
             grpo_attn = grpo_batch.get('attention_mask')
             sft_attn = sft_collated.get('attention_mask')
             grpo_truncated_mask = grpo_batch['truncated_mask']
             grpo_advantages = grpo_batch['advantages']
             
-            # デバッグログ
+            # すべての関連テンソルの最大長を計算
+            max_seq_len = max(grpo_seq_len, sft_seq_len)
             if grpo_attn is not None:
-                logger.debug(f"[CHORD] grpo_attn.shape={grpo_attn.shape}")
+                max_seq_len = max(max_seq_len, grpo_attn.shape[-1])
             if sft_attn is not None:
-                logger.debug(f"[CHORD] sft_attn.shape (before padding)={sft_attn.shape}")
+                max_seq_len = max(max_seq_len, sft_attn.shape[-1])
+            
+            # デバッグログ
+            logger.info(f"[CHORD] grpo_seq_len={grpo_seq_len}, sft_seq_len={sft_seq_len}, max_seq_len={max_seq_len}")
+            if grpo_attn is not None:
+                logger.info(f"[CHORD] grpo_attn.shape={grpo_attn.shape}, ndim={grpo_attn.ndim}")
+            if sft_attn is not None:
+                logger.info(f"[CHORD] sft_attn.shape={sft_attn.shape}, ndim={sft_attn.ndim}")
+            
+            # pad_token_idを取得
+            pad_token_id = self.template.tokenizer.pad_token_id
+            if pad_token_id is None:
+                pad_token_id = 0
             
             # ========== GRPOテンソルをmax_seq_lenにパディング ==========
             if grpo_seq_len < max_seq_len:
@@ -425,28 +429,65 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if sft_position_ids is not None:
                     sft_position_ids = F.pad(sft_position_ids, (0, pad_len), value=0)
             
-            # ========== ★重要: attention_maskを必ずmax_seq_lenに揃える ==========
-            # GRPOのattention_mask
-            if grpo_attn is not None:
-                grpo_attn_len = grpo_attn.shape[-1]
-                logger.debug(f"[CHORD] grpo_attn_len={grpo_attn_len}, max_seq_len={max_seq_len}")
-                if grpo_attn_len < max_seq_len:
-                    grpo_attn = F.pad(grpo_attn, (0, max_seq_len - grpo_attn_len), value=0)
-                    logger.debug(f"[CHORD] grpo_attn padded to {grpo_attn.shape}")
-                elif grpo_attn_len > max_seq_len:
-                    grpo_attn = grpo_attn[..., :max_seq_len]
-                    logger.debug(f"[CHORD] grpo_attn truncated to {grpo_attn.shape}")
+            # ========== ★重要: attention_maskを必ずmax_seq_lenに揃える（2D/4D両対応） ==========
+            def _pad_attention_mask(attn_mask, target_len, pad_value=0):
+                """attention_maskを指定長にパディング（2D/3D/4D対応）
+                
+                2D: [batch, seq_len] → 最後の次元のみパディング
+                3D: [batch, 1, seq_len] → 最後の次元のみパディング
+                4D: [batch, 1, seq_len, seq_len] → 最後の2次元両方をパディング（causal mask用）
+                """
+                if attn_mask is None:
+                    return None
+                
+                current_len = attn_mask.shape[-1]
+                if current_len == target_len:
+                    return attn_mask
+                
+                ndim = attn_mask.ndim
+                
+                if current_len < target_len:
+                    pad_len = target_len - current_len
+                    
+                    if ndim == 2:
+                        # [batch, seq_len]
+                        attn_mask = F.pad(attn_mask, (0, pad_len), value=pad_value)
+                    elif ndim == 3:
+                        # [batch, 1, seq_len]
+                        attn_mask = F.pad(attn_mask, (0, pad_len), value=pad_value)
+                    elif ndim == 4:
+                        # [batch, heads, seq_len, seq_len] - causal mask
+                        # 最後の2次元をパディング: (left, right, top, bottom)
+                        attn_mask = F.pad(attn_mask, (0, pad_len, 0, pad_len), value=pad_value)
+                    else:
+                        # その他の次元: 最後の次元のみパディング
+                        attn_mask = F.pad(attn_mask, (0, pad_len), value=pad_value)
+                    
+                    logger.debug(f"[CHORD] attention_mask padded: {current_len} -> {attn_mask.shape[-1]}")
+                    
+                elif current_len > target_len:
+                    # トランケート
+                    if ndim == 4:
+                        # 4D: 最後の2次元をトランケート
+                        attn_mask = attn_mask[..., :target_len, :target_len]
+                    else:
+                        # 2D/3D: 最後の次元のみトランケート
+                        attn_mask = attn_mask[..., :target_len]
+                    
+                    logger.debug(f"[CHORD] attention_mask truncated: {current_len} -> {attn_mask.shape[-1]}")
+                
+                return attn_mask
             
-            # SFTのattention_mask
+            # GRPOのattention_maskをパディング
+            grpo_attn = _pad_attention_mask(grpo_attn, max_seq_len, pad_value=0)
+            
+            # SFTのattention_maskをパディング
+            sft_attn = _pad_attention_mask(sft_attn, max_seq_len, pad_value=0)
+            
+            if grpo_attn is not None:
+                logger.info(f"[CHORD] grpo_attn after padding: shape={grpo_attn.shape}")
             if sft_attn is not None:
-                sft_attn_len = sft_attn.shape[-1]
-                logger.debug(f"[CHORD] sft_attn_len={sft_attn_len}, max_seq_len={max_seq_len}")
-                if sft_attn_len < max_seq_len:
-                    sft_attn = F.pad(sft_attn, (0, max_seq_len - sft_attn_len), value=0)
-                    logger.debug(f"[CHORD] sft_attn padded to {sft_attn.shape}")
-                elif sft_attn_len > max_seq_len:
-                    sft_attn = sft_attn[..., :max_seq_len]
-                    logger.debug(f"[CHORD] sft_attn truncated to {sft_attn.shape}")
+                logger.info(f"[CHORD] sft_attn after padding: shape={sft_attn.shape}")
             
             # ========== truncated_maskをmax_seq_lenに揃える ==========
             if grpo_truncated_mask is not None:
@@ -477,19 +518,39 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 merged_position_ids = None
             
-            # ========== attention_mask連結（最終確認付き） ==========
+            # ========== attention_mask連結（最終確認付き、4D対応） ==========
             if grpo_attn is not None and sft_attn is not None:
-                # 最終サイズ確認
-                logger.debug(f"[CHORD] Final: grpo_attn.shape={grpo_attn.shape}, sft_attn.shape={sft_attn.shape}")
-                if grpo_attn.shape[-1] != sft_attn.shape[-1]:
-                    # 強制的に揃える（フォールバック）
-                    logger.warning(f"[CHORD] Size mismatch! grpo_attn={grpo_attn.shape[-1]}, sft_attn={sft_attn.shape[-1]}, max_seq_len={max_seq_len}")
+                # 最終サイズ確認（シェイプの不一致をチェック）
+                logger.info(f"[CHORD] Final check: grpo_attn.shape={grpo_attn.shape}, sft_attn.shape={sft_attn.shape}")
+                
+                # シェイプが完全に一致しているか確認（dim=0以外）
+                shapes_match = True
+                for i in range(1, len(grpo_attn.shape)):
+                    if grpo_attn.shape[i] != sft_attn.shape[i]:
+                        shapes_match = False
+                        logger.warning(f"[CHORD] Dimension {i} mismatch: grpo={grpo_attn.shape[i]}, sft={sft_attn.shape[i]}")
+                
+                if not shapes_match:
+                    # 強制的に揃える（フォールバック）- 4D対応
                     target_len = max(grpo_attn.shape[-1], sft_attn.shape[-1])
-                    if grpo_attn.shape[-1] < target_len:
-                        grpo_attn = F.pad(grpo_attn, (0, target_len - grpo_attn.shape[-1]), value=0)
-                    if sft_attn.shape[-1] < target_len:
-                        sft_attn = F.pad(sft_attn, (0, target_len - sft_attn.shape[-1]), value=0)
-                merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
+                    logger.warning(f"[CHORD] Applying fallback padding to target_len={target_len}")
+                    
+                    # ヘルパー関数を再利用（スコープ内で定義済み）
+                    grpo_attn = _pad_attention_mask(grpo_attn, target_len, pad_value=0)
+                    sft_attn = _pad_attention_mask(sft_attn, target_len, pad_value=0)
+                    
+                    logger.info(f"[CHORD] After fallback: grpo_attn.shape={grpo_attn.shape}, sft_attn.shape={sft_attn.shape}")
+                
+                # 連結
+                try:
+                    merged_attention_mask = torch.cat([grpo_attn, sft_attn], dim=0)
+                    logger.info(f"[CHORD] merged_attention_mask.shape={merged_attention_mask.shape}")
+                except RuntimeError as e:
+                    # それでも失敗した場合は、すべての次元を詳細にログ出力
+                    logger.error(f"[CHORD] attention_mask concat failed: {e}")
+                    logger.error(f"[CHORD] grpo_attn.shape={grpo_attn.shape}, sft_attn.shape={sft_attn.shape}")
+                    # 最終手段: None に設定
+                    merged_attention_mask = None
             else:
                 merged_attention_mask = None
             
@@ -519,9 +580,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             merged_seq_lengths = torch.cat([grpo_seq_lengths, sft_seq_lengths])
             
             merged_packed = None
-            # ★修正: 非padding-freeモードでは、GRPOとSFTはバッチ次元で連結されている
-            # grpo_token_countを0に設定して、loss_funcでバッチ次元での分離を使用することを示す
-            grpo_token_count = 0
+            grpo_token_count = max_seq_len
 
         # ========== 新しい辞書を作成 ==========
         merged_batch = {}
@@ -1619,31 +1678,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         truncated_mask = data['truncated_mask']
         micro_batch_size = self.micro_batch_size
 
-        # ★修正: packed_seq_paramsがNoneの場合（非padding-freeモード）のハンドリング
-        if packed_seq_params is not None:
-            # padding-freeモード: cu_seqlensから長さを計算
-            lengths = packed_seq_params.cu_seqlens_q[1:num_grpo_samples + 1] - \
-                    packed_seq_params.cu_seqlens_q[:num_grpo_samples]
-            lengths_with_padding = packed_seq_params.cu_seqlens_q[1:] - packed_seq_params.cu_seqlens_q[:-1]
-            total_num_samples = packed_seq_params.num_samples
-        else:
-            # 非padding-freeモード: バッチサイズとシーケンス長から計算
-            batch_size = labels.shape[0]
-            seq_len = labels.shape[1]
-            # completion_maskから各サンプルの有効トークン数を計算
-            completion_mask_per_sample = (labels != -100)
-            lengths = completion_mask_per_sample.sum(dim=1)[:num_grpo_samples]
-            lengths_with_padding = completion_mask_per_sample.sum(dim=1)
-            total_num_samples = batch_size
+        # ★修正: GRPOサンプル数を使用
+        lengths = packed_seq_params.cu_seqlens_q[1:num_grpo_samples + 1] - \
+                packed_seq_params.cu_seqlens_q[:num_grpo_samples]
+        lengths_with_padding = packed_seq_params.cu_seqlens_q[1:] - packed_seq_params.cu_seqlens_q[:-1]
         
         # ★修正: GRPOとSFTのトークン範囲を分離
-        # grpo_token_count > 0: padding-freeモード（トークン次元でスライス）
-        # grpo_token_count == 0 かつ packed_seq_params is None: 非padding-freeモード（バッチ次元でスライス）
-        use_batch_separation = (packed_seq_params is None and num_sft_samples > 0 and chord_mu > 0)
-        use_token_separation = (packed_seq_params is not None and num_sft_samples > 0 and chord_mu > 0 and grpo_token_count > 0)
-        
-        if use_token_separation:
-            # padding-freeモード: トークン次元でスライス
+        if num_sft_samples > 0 and chord_mu > 0 and grpo_token_count > 0:
+            # GRPO部分
             grpo_labels = labels[:, :grpo_token_count]
             grpo_completion_mask = completion_mask[:, :grpo_token_count]
             grpo_advantages = advantages[:grpo_token_count]
@@ -1652,22 +1694,6 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # SFT部分
             sft_labels = labels[:, grpo_token_count:]
             sft_completion_mask = completion_mask[:, grpo_token_count:]
-        elif use_batch_separation:
-            # 非padding-freeモード: バッチ次元でスライス
-            # GRPOとSFTはバッチ次元で連結されている
-            grpo_labels = labels[:num_grpo_samples]
-            grpo_completion_mask = completion_mask[:num_grpo_samples]
-            if advantages.dim() == 2:
-                grpo_advantages = advantages[:num_grpo_samples]
-            else:
-                # フラット形式の場合
-                grpo_seq_len = labels.shape[1]
-                grpo_advantages = advantages[:num_grpo_samples * grpo_seq_len].view(num_grpo_samples, grpo_seq_len)
-            grpo_truncated_mask = truncated_mask[:num_grpo_samples]
-            
-            # SFT部分
-            sft_labels = labels[num_grpo_samples:]
-            sft_completion_mask = completion_mask[num_grpo_samples:]
         else:
             grpo_labels = labels
             grpo_completion_mask = completion_mask
@@ -1677,24 +1703,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_completion_mask = None
 
         # get_logps with per_token=True now returns full sequences (all_gather in CP mode)
-        if packed_seq_params is not None:
-            per_token_logps = self.get_logps(
-                output_tensor, labels, packed_seq_params, packed_seq_params.num_samples, per_token=True)
-        else:
-            # 非padding-freeモード
-            per_token_logps = self.get_logps(
-                output_tensor, labels, None, total_num_samples, per_token=True)
+        per_token_logps = self.get_logps(
+            output_tensor, labels, packed_seq_params, packed_seq_params.num_samples, per_token=True)
 
         # ★修正: GRPO部分のみ抽出
-        if num_sft_samples > 0 and chord_mu > 0:
-            if packed_seq_params is not None and grpo_token_count > 0:
-                # padding-freeモード: トークン次元でスライス
-                grpo_per_token_logps = per_token_logps[:, :grpo_token_count]
-                sft_per_token_logps = per_token_logps[:, grpo_token_count:]
-            else:
-                # 非padding-freeモード: バッチ次元でスライス
-                grpo_per_token_logps = per_token_logps[:num_grpo_samples]
-                sft_per_token_logps = per_token_logps[num_grpo_samples:]
+        if grpo_token_count > 0 and num_sft_samples > 0:
+            grpo_per_token_logps = per_token_logps[:, :grpo_token_count]
+            sft_per_token_logps = per_token_logps[:, grpo_token_count:]
         else:
             grpo_per_token_logps = per_token_logps
             sft_per_token_logps = None
@@ -1706,58 +1721,26 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                                'Consider increasing max_completion_length')
 
         # KL計算（GRPOのみ）
-        # ★修正: ref_per_token_logpsはGRPOサンプルのみで計算されているため、
-        # per_token_logpsもGRPO部分のみ（grpo_per_token_logps）を使用する
-        per_token_kl = None
         if self.beta != 0.0:
             ref_per_token_logps = data.get('ref_per_token_logps')
-            if ref_per_token_logps is not None:
-                # ref_per_token_logpsとgrpo_per_token_logpsのサイズを揃える
-                ref_shape = ref_per_token_logps.shape
-                grpo_shape = grpo_per_token_logps.shape
-                
-                # サイズが異なる場合は調整
-                if ref_shape != grpo_shape:
-                    min_tokens = min(ref_shape[-1], grpo_shape[-1])
-                    ref_per_token_logps_aligned = ref_per_token_logps[..., :min_tokens]
-                    grpo_per_token_logps_aligned = grpo_per_token_logps[..., :min_tokens]
-                    logger.debug(f"[CHORD] KL alignment: ref={ref_shape}, grpo={grpo_shape}, aligned to {min_tokens}")
-                else:
-                    ref_per_token_logps_aligned = ref_per_token_logps
-                    grpo_per_token_logps_aligned = grpo_per_token_logps
-                
-                # KL divergence計算（GRPO部分のみ）
-                per_token_kl = (
-                    torch.exp(ref_per_token_logps_aligned - grpo_per_token_logps_aligned) 
-                    - (ref_per_token_logps_aligned - grpo_per_token_logps_aligned) - 1
-                )
+            if grpo_token_count > 0 and num_sft_samples > 0 and ref_per_token_logps is not None:
+                grpo_ref_per_token_logps = ref_per_token_logps[:, :grpo_token_count]
+            else:
+                grpo_ref_per_token_logps = ref_per_token_logps
+            per_token_kl = (
+                torch.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1)
 
         # old_logs処理（GRPOのみ）
-        # ★修正: old_per_token_logpsもGRPOサンプルのみで計算されているため、
-        # grpo_per_token_logpsとサイズを明示的に揃える
         old_per_token_logps = data.get('old_per_token_logps')
         if old_per_token_logps is None:
             grpo_old_per_token_logps = grpo_per_token_logps.detach()
         else:
-            # サイズ調整
-            old_shape = old_per_token_logps.shape
-            grpo_shape = grpo_per_token_logps.shape
-            
-            if old_shape != grpo_shape:
-                min_tokens = min(old_shape[-1], grpo_shape[-1])
-                grpo_old_per_token_logps = old_per_token_logps[..., :min_tokens]
-                # grpo_per_token_logpsも同じサイズに調整（log_ratio計算用）
-                grpo_per_token_logps_for_ratio = grpo_per_token_logps[..., :min_tokens]
-                logger.debug(f"[CHORD] old_logps alignment: old={old_shape}, grpo={grpo_shape}, aligned to {min_tokens}")
+            if grpo_token_count > 0 and num_sft_samples > 0:
+                grpo_old_per_token_logps = old_per_token_logps[:, :grpo_token_count]
             else:
                 grpo_old_per_token_logps = old_per_token_logps
-                grpo_per_token_logps_for_ratio = grpo_per_token_logps
         
-        # log_ratio計算（サイズ調整済み）
-        if old_per_token_logps is not None and old_per_token_logps.shape != grpo_per_token_logps.shape:
-            log_ratio = grpo_per_token_logps_for_ratio - grpo_old_per_token_logps
-        else:
-            log_ratio = grpo_per_token_logps - grpo_old_per_token_logps
+        log_ratio = grpo_per_token_logps - grpo_old_per_token_logps
 
         # ★修正: GRPOのlengths_with_paddingもGRPO部分のみ
         grpo_lengths_with_padding = lengths_with_padding[:num_grpo_samples]
@@ -1794,25 +1777,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 grpo_advantages_aligned = grpo_advantages[-clamped_ratios.shape[1]:]
                 per_token_loss = -clamped_ratios * grpo_advantages_aligned.unsqueeze(0) * grpo_per_token_logps
             else:
-                # ★追加: 非padding-freeモードのCISPOサポート
-                # grpo_advantagesとgrpo_per_token_logpsのサイズを揃える
-                if grpo_advantages.dim() == 2:
-                    # [batch, seq_len]形式
-                    grpo_advantages_aligned = grpo_advantages
-                else:
-                    # [batch * seq_len]形式 → [batch, seq_len]に変形
-                    grpo_advantages_aligned = grpo_advantages.view(grpo_per_token_logps.shape)
-                
-                # サイズ調整
-                if grpo_advantages_aligned.shape != grpo_per_token_logps.shape:
-                    min_seq = min(grpo_advantages_aligned.shape[-1], grpo_per_token_logps.shape[-1])
-                    grpo_advantages_aligned = grpo_advantages_aligned[..., :min_seq]
-                    grpo_per_token_logps_loss = grpo_per_token_logps[..., :min_seq]
-                    clamped_ratios = clamped_ratios[..., :min_seq] if clamped_ratios.shape[-1] > min_seq else clamped_ratios
-                else:
-                    grpo_per_token_logps_loss = grpo_per_token_logps
-                
-                per_token_loss = -clamped_ratios * grpo_advantages_aligned * grpo_per_token_logps_loss
+                raise NotImplementedError
         elif self.loss_type in ['grpo', 'bnpo', 'dr_grpo', 'dapo']:
             coef_2 = torch.clamp(coef_1, 1 - self.epsilon_low, 1 + self.epsilon_high)
             if self.args.delta is not None:
@@ -1827,92 +1792,23 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 per_token_loss1 = coef_1 * grpo_advantages_aligned.unsqueeze(0)
                 per_token_loss2 = coef_2 * grpo_advantages_aligned.unsqueeze(0)
             else:
-                # ★追加: 非padding-freeモードのGRPO/BNPO/DR_GRPO/DAPOサポート
-                # grpo_advantagesの形状を調整
-                if grpo_advantages.dim() == 2:
-                    grpo_advantages_aligned = grpo_advantages
-                else:
-                    # フラット形式の場合はreshape
-                    try:
-                        grpo_advantages_aligned = grpo_advantages.view(grpo_per_token_logps.shape)
-                    except RuntimeError:
-                        # サイズが合わない場合は最小サイズに調整
-                        target_size = grpo_per_token_logps.numel()
-                        if grpo_advantages.numel() >= target_size:
-                            grpo_advantages_aligned = grpo_advantages[:target_size].view(grpo_per_token_logps.shape)
-                        else:
-                            # パディング
-                            padded = torch.zeros(target_size, device=grpo_advantages.device, dtype=grpo_advantages.dtype)
-                            padded[:grpo_advantages.numel()] = grpo_advantages
-                            grpo_advantages_aligned = padded.view(grpo_per_token_logps.shape)
-                
-                # coef_1, coef_2もgrpo_per_token_logpsと同じ形状に調整
-                if coef_1.shape != grpo_per_token_logps.shape:
-                    if coef_1.dim() == 1 or (coef_1.dim() == 2 and coef_1.shape[0] == 1):
-                        # sequence-levelの場合、token-levelに展開
-                        coef_1 = coef_1.expand_as(grpo_per_token_logps)
-                        coef_2 = coef_2.expand_as(grpo_per_token_logps)
-                
-                per_token_loss1 = coef_1 * grpo_advantages_aligned
-                per_token_loss2 = coef_2 * grpo_advantages_aligned
+                raise NotImplementedError
             per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
         else:
             raise ValueError(f'Unknown loss type: {self.loss_type}')
         
-        # ★修正: KLペナルティの適用（サイズ調整付き）
-        if self.beta != 0.0 and per_token_kl is not None:
-            # per_token_klとper_token_lossのサイズを揃える
-            if per_token_kl.shape != per_token_loss.shape:
-                min_tokens = min(per_token_kl.shape[-1], per_token_loss.shape[-1])
-                per_token_kl_aligned = per_token_kl[..., :min_tokens]
-                per_token_loss_trimmed = per_token_loss[..., :min_tokens]
-                # KLをper_token_lossに加算
-                per_token_loss_with_kl = per_token_loss_trimmed + self.beta * per_token_kl_aligned
-                # 元のper_token_lossのサイズに戻す（余分な部分はそのまま）
-                if per_token_loss.shape[-1] > min_tokens:
-                    per_token_loss = torch.cat([
-                        per_token_loss_with_kl, 
-                        per_token_loss[..., min_tokens:]
-                    ], dim=-1)
-                else:
-                    per_token_loss = per_token_loss_with_kl
-            else:
-                per_token_loss = per_token_loss + self.beta * per_token_kl
+        if self.beta != 0.0:
+            per_token_loss = per_token_loss + self.beta * per_token_kl
 
         # GRPO損失の集約
         if self.loss_type == 'grpo':
-            if self.template.padding_free:
-                # padding-freeモード: 1Dテンソルをシーケンス長でsplit
-                loss_list = torch.split(per_token_loss.squeeze(0), grpo_lengths_with_padding.tolist())
-                mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
-                sample_loss = torch.stack([
-                    (loss * mask).sum() / mask.sum().clamp(min=1.0)
-                    for loss, mask in zip(loss_list[:num_grpo_samples], mask_list[:num_grpo_samples])
-                ])
-                grpo_loss = sample_loss.mean()
-            else:
-                # ★追加: 非padding-freeモード: [batch, seq_len]形式
-                # per_token_lossとgrpo_completion_maskのサイズを揃える
-                if per_token_loss.shape != grpo_completion_mask.shape:
-                    min_seq = min(per_token_loss.shape[-1], grpo_completion_mask.shape[-1])
-                    per_token_loss_aligned = per_token_loss[..., :min_seq]
-                    grpo_completion_mask_aligned = grpo_completion_mask[..., :min_seq]
-                else:
-                    per_token_loss_aligned = per_token_loss
-                    grpo_completion_mask_aligned = grpo_completion_mask
-                
-                # バッチ内の各サンプルごとに損失を計算
-                if per_token_loss_aligned.dim() == 2:
-                    # [batch, seq_len] 形式
-                    sample_loss = []
-                    for i in range(min(num_grpo_samples, per_token_loss_aligned.shape[0])):
-                        loss_i = per_token_loss_aligned[i]
-                        mask_i = grpo_completion_mask_aligned[i]
-                        sample_loss.append((loss_i * mask_i).sum() / mask_i.sum().clamp(min=1.0))
-                    grpo_loss = torch.stack(sample_loss).mean() if sample_loss else torch.tensor(0.0, device=self.device)
-                else:
-                    # フォールバック: 全体で計算
-                    grpo_loss = (per_token_loss_aligned * grpo_completion_mask_aligned).sum() / grpo_completion_mask_aligned.sum().clamp(min=1.0)
+            loss_list = torch.split(per_token_loss.squeeze(0), grpo_lengths_with_padding.tolist())
+            mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
+            sample_loss = torch.stack([
+                (loss * mask).sum() / mask.sum().clamp(min=1.0)
+                for loss, mask in zip(loss_list[:num_grpo_samples], mask_list[:num_grpo_samples])
+            ])
+            grpo_loss = sample_loss.mean()
         elif self.loss_type == 'bnpo':
             grpo_loss = (per_token_loss * grpo_completion_mask).sum() / grpo_completion_mask.sum().clamp(min=1.0)
         elif self.loss_type == 'dr_grpo':
@@ -1953,23 +1849,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             'completions/min_length': total_lengths.float().min(),
         }
 
-        if self.beta != 0.0 and per_token_kl is not None:
-            # ★修正: per_token_klとcompletion_maskのサイズを揃える
-            if per_token_kl.shape != completion_mask.shape:
-                # GRPO部分のcompletion_maskのみ使用
-                if per_token_kl.shape == grpo_completion_mask.shape:
-                    kl_mask = grpo_completion_mask
-                else:
-                    # サイズを揃える
-                    min_tokens = min(per_token_kl.shape[-1], completion_mask.shape[-1])
-                    per_token_kl_aligned = per_token_kl[..., :min_tokens]
-                    kl_mask = completion_mask[..., :min_tokens]
-                    kl_value = (per_token_kl_aligned * kl_mask).sum() / kl_mask.sum().clamp(min=1.0)
-                    avg_metric['kl'] = kl_value.clone().detach()
-            else:
-                # Unified processing (no CP-specific logic needed)
-                kl_value = (per_token_kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
-                avg_metric['kl'] = kl_value.clone().detach()
+        if self.beta != 0.0:
+            # Unified processing (no CP-specific logic needed)
+            kl_value = (per_token_kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+            avg_metric['kl'] = kl_value.clone().detach()
 
         # ★追加: CHORDメトリクス
         if sft_loss is not None and chord_mu > 0:
@@ -1994,17 +1877,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 advantages_for_metrics = advantages[-coef_1_expanded.shape[1]:]
                 is_cispo_clipped = (coef_1_expanded > self.epsilon_high) & (advantages_for_metrics.unsqueeze(0) > 0)
             else:
-                # ★追加: 非padding-freeモードのCISPOクリップメトリクス
-                coef_1_expanded = coef_1
-                if advantages.dim() == 2:
-                    advantages_for_metrics = advantages
-                else:
-                    try:
-                        advantages_for_metrics = advantages.view(coef_1_expanded.shape)
-                    except RuntimeError:
-                        # サイズ不一致の場合はスキップ
-                        advantages_for_metrics = torch.zeros_like(coef_1_expanded)
-                is_cispo_clipped = (coef_1_expanded > self.epsilon_high) & (advantages_for_metrics > 0)
+                raise NotImplementedError
             cispo_clip_ratio = (is_cispo_clipped.float() * completion_mask).sum() / completion_token_count
             # Store local clip ratio, _all_reduce_metric will handle averaging across ranks
             self._metrics[mode]['cispo_clip_ratio'].append(cispo_clip_ratio)
@@ -2020,18 +1893,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 is_low_clipped = (coef_1_expanded < 1 - self.epsilon_low) & (advantages_for_metrics.unsqueeze(0) < 0)
                 is_high_clipped = (coef_1_expanded > 1 + self.epsilon_high) & (advantages_for_metrics.unsqueeze(0) > 0)
             else:
-                # ★追加: 非padding-freeモードのGRPO/BNPO/DR_GRPO/DAPOクリップメトリクス
-                coef_1_expanded = torch.exp(log_importance_weights)
-                if advantages.dim() == 2:
-                    advantages_for_metrics = advantages
-                else:
-                    try:
-                        advantages_for_metrics = advantages.view(coef_1_expanded.shape)
-                    except RuntimeError:
-                        # サイズ不一致の場合はゼロで初期化
-                        advantages_for_metrics = torch.zeros_like(coef_1_expanded)
-                is_low_clipped = (coef_1_expanded < 1 - self.epsilon_low) & (advantages_for_metrics < 0)
-                is_high_clipped = (coef_1_expanded > 1 + self.epsilon_high) & (advantages_for_metrics > 0)
+                raise NotImplementedError
             low_clip = (is_low_clipped.float() * completion_mask).sum() / completion_token_count
             high_clip = (is_high_clipped.float() * completion_mask).sum() / completion_token_count
             is_region_clipped = is_low_clipped | is_high_clipped
