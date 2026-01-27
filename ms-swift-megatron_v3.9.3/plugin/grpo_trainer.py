@@ -1678,10 +1678,18 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         truncated_mask = data['truncated_mask']
         micro_batch_size = self.micro_batch_size
 
-        # ★修正: GRPOサンプル数を使用
-        lengths = packed_seq_params.cu_seqlens_q[1:num_grpo_samples + 1] - \
-                packed_seq_params.cu_seqlens_q[:num_grpo_samples]
-        lengths_with_padding = packed_seq_params.cu_seqlens_q[1:] - packed_seq_params.cu_seqlens_q[:-1]
+        # ★修正: GRPOサンプル数を使用 (packed_seq_params が None の場合に対応)
+        if packed_seq_params is not None:
+            lengths = packed_seq_params.cu_seqlens_q[1:num_grpo_samples + 1] - \
+                    packed_seq_params.cu_seqlens_q[:num_grpo_samples]
+            lengths_with_padding = packed_seq_params.cu_seqlens_q[1:] - packed_seq_params.cu_seqlens_q[:-1]
+            num_samples_for_logps = packed_seq_params.num_samples
+        else:
+            # 非padding-freeモード: labelsの形状から長さを計算
+            seq_len = labels.shape[1]
+            lengths = torch.tensor([seq_len] * num_grpo_samples, device=labels.device)
+            lengths_with_padding = torch.tensor([seq_len] * (num_grpo_samples + num_sft_samples), device=labels.device)
+            num_samples_for_logps = num_grpo_samples + num_sft_samples
         
         # ★修正: GRPOとSFTのトークン範囲を分離
         if num_sft_samples > 0 and chord_mu > 0 and grpo_token_count > 0:
@@ -1704,7 +1712,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
         # get_logps with per_token=True now returns full sequences (all_gather in CP mode)
         per_token_logps = self.get_logps(
-            output_tensor, labels, packed_seq_params, packed_seq_params.num_samples, per_token=True)
+            output_tensor, labels, packed_seq_params, num_samples_for_logps, per_token=True)
 
         # ★修正: GRPO部分のみ抽出
         if grpo_token_count > 0 and num_sft_samples > 0:
