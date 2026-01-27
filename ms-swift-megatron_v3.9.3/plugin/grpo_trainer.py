@@ -605,6 +605,51 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         if merged_attention_mask is not None:
             merged_batch['attention_mask'] = merged_attention_mask
         
+        # ★★★ 重要: input_ids と attention_mask のseq_len一致を最終確認 ★★★
+        # Qwen3-Next等のモデルは attention_mask を hidden_states に直接乗算するため、
+        # サイズが一致しないとRuntimeErrorが発生する
+        final_input_ids = merged_batch['input_ids']
+        final_attn_mask = merged_batch.get('attention_mask')
+        
+        if final_attn_mask is not None:
+            input_seq_len = final_input_ids.shape[1]
+            attn_seq_len = final_attn_mask.shape[-1]
+            
+            if input_seq_len != attn_seq_len:
+                logger.warning(f"[CHORD] input_ids.shape[1]={input_seq_len} != attention_mask.shape[-1]={attn_seq_len}, fixing...")
+                
+                # attention_maskのseq_lenに合わせてinput_idsをパディング（またはトランケート）
+                if input_seq_len < attn_seq_len:
+                    pad_len = attn_seq_len - input_seq_len
+                    pad_token_id = self.template.tokenizer.pad_token_id or 0
+                    
+                    # input_ids, labels, completion_mask, truncated_mask をパディング
+                    merged_batch['input_ids'] = F.pad(final_input_ids, (0, pad_len), value=pad_token_id)
+                    merged_batch['labels'] = F.pad(merged_batch['labels'], (0, pad_len), value=-100)
+                    merged_batch['completion_mask'] = F.pad(merged_batch['completion_mask'], (0, pad_len), value=False)
+                    merged_batch['truncated_mask'] = F.pad(merged_batch['truncated_mask'], (0, pad_len), value=False)
+                    
+                    if 'position_ids' in merged_batch and merged_batch['position_ids'] is not None:
+                        merged_batch['position_ids'] = F.pad(merged_batch['position_ids'], (0, pad_len), value=0)
+                    if 'text_position_ids' in merged_batch and merged_batch['text_position_ids'] is not None:
+                        merged_batch['text_position_ids'] = F.pad(merged_batch['text_position_ids'], (0, pad_len), value=0)
+                    
+                    logger.info(f"[CHORD] Padded input_ids from {input_seq_len} to {attn_seq_len}")
+                    
+                elif input_seq_len > attn_seq_len:
+                    # attention_maskをinput_idsに合わせてパディング
+                    pad_len = input_seq_len - attn_seq_len
+                    attn_mask = final_attn_mask
+                    ndim = attn_mask.ndim
+                    
+                    if ndim == 4:
+                        attn_mask = F.pad(attn_mask, (0, pad_len, 0, pad_len), value=0)
+                    else:
+                        attn_mask = F.pad(attn_mask, (0, pad_len), value=0)
+                    
+                    merged_batch['attention_mask'] = attn_mask
+                    logger.info(f"[CHORD] Padded attention_mask from {attn_seq_len} to {input_seq_len}")
+        
         # CHORDメタデータを追加
         merged_batch['_chord_mu'] = chord_mu
         merged_batch['_num_grpo_samples'] = num_grpo_samples
