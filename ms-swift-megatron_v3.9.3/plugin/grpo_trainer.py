@@ -1757,18 +1757,37 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         if self.importance_sampling_level == 'token':
             log_importance_weights = log_ratio
         elif self.importance_sampling_level in ['sequence', 'sequence_token']:
-            log_ratio_list = torch.split(log_ratio.squeeze(0), grpo_lengths_with_padding.tolist())
-            mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
-            seq_weights = torch.stack([(lr * m).sum() / m.sum().clamp(min=1.0)
-                                    for lr, m in zip(log_ratio_list, mask_list)])
-            seq_level_log_weights = seq_weights.to(log_ratio.dtype).unsqueeze(-1)
-            if self.importance_sampling_level == 'sequence':
-                log_importance_weights = seq_level_log_weights
+            if self.template.padding_free:
+                # padding-freeモード: パックされたシーケンスをsplitで分割
+                log_ratio_list = torch.split(log_ratio.squeeze(0), grpo_lengths_with_padding.tolist())
+                mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
+                seq_weights = torch.stack([(lr * m).sum() / m.sum().clamp(min=1.0)
+                                        for lr, m in zip(log_ratio_list, mask_list)])
+                seq_level_log_weights = seq_weights.to(log_ratio.dtype).unsqueeze(-1)
+                if self.importance_sampling_level == 'sequence':
+                    log_importance_weights = seq_level_log_weights
+                else:
+                    seq_level_log_weight = seq_level_log_weights.detach()
+                    seq_level_log_weight = torch.repeat_interleave(
+                        seq_level_log_weight.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
+                    log_importance_weights = grpo_per_token_logps - grpo_per_token_logps.detach() + seq_level_log_weight
             else:
-                seq_level_log_weight = seq_level_log_weights.detach()
-                seq_level_log_weight = torch.repeat_interleave(
-                    seq_level_log_weight.squeeze(-1), grpo_lengths_with_padding, dim=0).unsqueeze(0)
-                log_importance_weights = grpo_per_token_logps - grpo_per_token_logps.detach() + seq_level_log_weight
+                # 非padding-freeモード: [batch, seq_len] 形式
+                # GRPO部分のみ抽出
+                grpo_log_ratio = log_ratio[:num_grpo_samples] if log_ratio.dim() > 1 else log_ratio
+                grpo_mask_for_is = grpo_completion_mask[:num_grpo_samples] if grpo_completion_mask.dim() > 1 else grpo_completion_mask
+                seq_weights = torch.stack([
+                    (grpo_log_ratio[i] * grpo_mask_for_is[i]).sum() / grpo_mask_for_is[i].sum().clamp(min=1.0)
+                    for i in range(num_grpo_samples)
+                ])
+                seq_level_log_weights = seq_weights.to(log_ratio.dtype).unsqueeze(-1)
+                if self.importance_sampling_level == 'sequence':
+                    log_importance_weights = seq_level_log_weights
+                else:
+                    # sequence_token: シーケンスレベルの重みをトークンレベルに展開
+                    seq_level_log_weight = seq_level_log_weights.detach()
+                    # [num_grpo_samples, 1] -> [num_grpo_samples, seq_len] にブロードキャスト
+                    log_importance_weights = grpo_per_token_logps - grpo_per_token_logps.detach() + seq_level_log_weight
         else:
             raise ValueError(f"Unknown importance sampling level: {self.importance_sampling_level}")
 
@@ -1824,13 +1843,25 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
         # GRPO損失の集約
         if self.loss_type == 'grpo':
-            loss_list = torch.split(per_token_loss.squeeze(0), grpo_lengths_with_padding.tolist())
-            mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
-            sample_loss = torch.stack([
-                (loss * mask).sum() / mask.sum().clamp(min=1.0)
-                for loss, mask in zip(loss_list[:num_grpo_samples], mask_list[:num_grpo_samples])
-            ])
-            grpo_loss = sample_loss.mean()
+            if self.template.padding_free:
+                # padding-freeモード: パックされたシーケンスをsplitで分割
+                loss_list = torch.split(per_token_loss.squeeze(0), grpo_lengths_with_padding.tolist())
+                mask_list = torch.split(grpo_completion_mask.squeeze(0), grpo_lengths_with_padding.tolist())
+                sample_loss = torch.stack([
+                    (loss * mask).sum() / mask.sum().clamp(min=1.0)
+                    for loss, mask in zip(loss_list[:num_grpo_samples], mask_list[:num_grpo_samples])
+                ])
+                grpo_loss = sample_loss.mean()
+            else:
+                # 非padding-freeモード: [batch, seq_len] 形式、バッチ次元でイテレート
+                # GRPO部分のみ抽出 (最初の num_grpo_samples 行)
+                grpo_per_token_loss = per_token_loss[:num_grpo_samples] if per_token_loss.dim() > 1 else per_token_loss
+                grpo_mask = grpo_completion_mask[:num_grpo_samples] if grpo_completion_mask.dim() > 1 else grpo_completion_mask
+                sample_loss = torch.stack([
+                    (grpo_per_token_loss[i] * grpo_mask[i]).sum() / grpo_mask[i].sum().clamp(min=1.0)
+                    for i in range(num_grpo_samples)
+                ])
+                grpo_loss = sample_loss.mean()
         elif self.loss_type == 'bnpo':
             grpo_loss = (per_token_loss * grpo_completion_mask).sum() / grpo_completion_mask.sum().clamp(min=1.0)
         elif self.loss_type == 'dr_grpo':
