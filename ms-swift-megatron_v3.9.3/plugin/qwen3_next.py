@@ -463,6 +463,32 @@ class Qwen3NextGatedDeltaNet(MegatronModule, _Qwen3NextGatedDeltaNet):
                         f"[Qwen3NextGatedDeltaNet] Unexpected attention_mask.ndim={attention_mask.ndim}, "
                         f"shape={attention_mask.shape}. Expected 2D, 3D, or 4D."
                     )
+                
+                # ★★★ v10修正: attention_maskのサイズをhidden_statesに合わせる ★★★
+                # エラー: "The size of tensor a (481) must match the size of tensor b (549)"
+                # 原因: CHORDでバッチを混合する際、hidden_statesとattention_maskのシーケンス長が不一致
+                # 修正: hidden_statesの実際のシーケンス長に合わせてattention_maskを調整
+                hs_seq_len = hidden_states.shape[1]  # hidden_states: [batch, seq_len, hidden]
+                mask_seq_len = attention_mask.shape[1]  # attention_mask: [batch, seq_len]
+                
+                if mask_seq_len != hs_seq_len:
+                    logger.debug(
+                        f"[Qwen3NextGatedDeltaNet] Adjusting attention_mask size: "
+                        f"hidden_states.seq_len={hs_seq_len}, attention_mask.seq_len={mask_seq_len}"
+                    )
+                    if mask_seq_len > hs_seq_len:
+                        # attention_maskがhidden_statesより長い場合: truncate
+                        attention_mask = attention_mask[:, :hs_seq_len]
+                    else:
+                        # attention_maskがhidden_statesより短い場合: pad with False
+                        pad_len = hs_seq_len - mask_seq_len
+                        padding = torch.zeros(
+                            (attention_mask.shape[0], pad_len), 
+                            dtype=attention_mask.dtype, 
+                            device=attention_mask.device
+                        )
+                        attention_mask = torch.cat([attention_mask, padding], dim=1)
+        
         res = super().forward(hidden_states=hidden_states, attention_mask=attention_mask)
         if thd_format and not args.packing:
             res = res[attention_mask][:, None]
