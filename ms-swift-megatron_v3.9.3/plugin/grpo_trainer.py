@@ -303,19 +303,30 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         num_grpo_samples = grpo_batch.get('num_samples', self.micro_batch_size)
         num_sft_samples = len(sft_samples)
         
+        # ★★★ [CHORD FIX] CUDA同期でvLLMの処理完了を保証 ★★★
+        torch.cuda.synchronize()
+        
         template = self.template
         args = get_args()
         with self._template_context(template):
             sft_collated = to_device(
                 template.data_collator(sft_samples, padding_to=get_padding_to(args)), self.device)
         
+        # ★★★ [CHORD FIX] SFTバッチのテンソルを明示的にクローンしてメモリ所有権を確立 ★★★
+        for _key in list(sft_collated.keys()):
+            if isinstance(sft_collated[_key], torch.Tensor):
+                sft_collated[_key] = sft_collated[_key].detach().clone()
+        
         # GRPOの既存データを取得
-        grpo_labels = grpo_batch['labels']
-        grpo_input_ids = grpo_batch['input_ids']
+        # ★★★ [CHORD FIX] GRPOバッチのテンソルも安全のためクローン ★★★
+        grpo_labels = grpo_batch['labels'].detach().clone()
+        grpo_input_ids = grpo_batch['input_ids'].detach().clone()
         grpo_position_ids = grpo_batch.get('position_ids') if 'position_ids' in grpo_batch else grpo_batch.get('text_position_ids')
-        grpo_completion_mask = grpo_batch['completion_mask']
-        grpo_advantages = grpo_batch['advantages']
-        grpo_seq_lengths = grpo_batch['seq_lengths']
+        if grpo_position_ids is not None:
+            grpo_position_ids = grpo_position_ids.detach().clone()
+        grpo_completion_mask = grpo_batch['completion_mask'].detach().clone()
+        grpo_advantages = grpo_batch['advantages'].detach().clone()
+        grpo_seq_lengths = grpo_batch['seq_lengths'].detach().clone()
         grpo_packed = grpo_batch.get('packed_seq_params')
         
         # SFTデータを取得
@@ -341,9 +352,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_labels_actual = sft_labels[:, :sft_expected_tokens]
             sft_completion_mask_actual = (sft_labels_actual != -100)
             
-            merged_input_ids = torch.cat([grpo_input_ids_actual, sft_input_ids_actual], dim=1)
-            merged_labels = torch.cat([grpo_labels_actual, sft_labels_actual], dim=1)
-            merged_completion_mask = torch.cat([grpo_completion_mask_actual, sft_completion_mask_actual], dim=1)
+            # ★★★ [CHORD FIX] cat後もクローンして新しいメモリ領域に配置 ★★★
+            merged_input_ids = torch.cat([grpo_input_ids_actual, sft_input_ids_actual], dim=1).clone()
+            merged_labels = torch.cat([grpo_labels_actual, sft_labels_actual], dim=1).clone()
+            merged_completion_mask = torch.cat([grpo_completion_mask_actual, sft_completion_mask_actual], dim=1).clone()
             
             if grpo_position_ids is not None and sft_position_ids is not None:
                 grpo_pos_actual = grpo_position_ids[:, :grpo_expected_tokens]
@@ -509,9 +521,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             sft_completion_mask = (sft_labels != -100)
             
             # ========== バッチ次元で連結（dim=0） ==========
-            merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=0)
-            merged_labels = torch.cat([grpo_labels, sft_labels], dim=0)
-            merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=0)
+            # ★★★ [CHORD FIX] バッチ次元で連結後にクローン ★★★
+            merged_input_ids = torch.cat([grpo_input_ids, sft_input_ids], dim=0).clone()
+            merged_labels = torch.cat([grpo_labels, sft_labels], dim=0).clone()
+            merged_completion_mask = torch.cat([grpo_completion_mask, sft_completion_mask], dim=0).clone()
             
             if grpo_position_ids is not None and sft_position_ids is not None:
                 merged_position_ids = torch.cat([grpo_position_ids, sft_position_ids], dim=0)
@@ -655,6 +668,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         merged_batch['_num_grpo_samples'] = num_grpo_samples
         merged_batch['_num_sft_samples'] = num_sft_samples
         merged_batch['_grpo_token_count'] = grpo_token_count
+        
+        # ★★★ [CHORD FIX] 最終同期とガベージコレクション ★★★
+        torch.cuda.synchronize()
+        gc.collect()
         
         return merged_batch
 
@@ -1284,13 +1301,23 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # Step3: Rollout
             outputs: List[RolloutOutput] = self._rollout(batch)
 
+            # ★★★ [CHORD FIX] vLLMのsleep前にCUDA同期 ★★★
+            torch.cuda.synchronize()
+            
             # Step4: Sleep to release memory
             if self.vllm_mode == 'colocate' and self.args.sleep_level > 0:
                 self.engine.engine.reset_prefix_cache()
+                # ★★★ [CHORD FIX] sleep前に再度同期 ★★★
+                torch.cuda.synchronize()
                 self.engine.engine.sleep(level=self.args.sleep_level)
                 aggressive_empty_cache()
                 set_expandable_segments(True)
             batch = self.postprocess_rollout_data(batch, outputs)
+            
+            # ★★★ [CHORD FIX] バッチ内のテンソルをクローンしてメモリ所有権を確立 ★★★
+            for _item in batch:
+                if 'response_token_ids' in _item and isinstance(_item['response_token_ids'], torch.Tensor):
+                    _item['response_token_ids'] = _item['response_token_ids'].detach().clone()
 
         return batch
 
@@ -1749,7 +1776,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
     @profiling_decorator
     def loss_func(self, output_tensor: torch.Tensor, data: Dict[str, Any]):
-            # ★追加: CHORDメタデータを取得
+        # ★★★ [CHORD FIX] backward pass前にメモリをクリーンアップ ★★★
+        torch.cuda.synchronize()
+        gc.collect()
+        
+        # ★追加: CHORDメタデータを取得
         chord_mu = data.get('_chord_mu', 0.0)
         num_grpo_samples = data.get('_num_grpo_samples', data.get('num_samples', self.micro_batch_size))
         num_sft_samples = data.get('_num_sft_samples', 0)
