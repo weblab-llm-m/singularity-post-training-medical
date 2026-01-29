@@ -1795,10 +1795,63 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 actual_tokens = input_ids_for_model.shape[1]
                 if expected_tokens is not None and expected_tokens != actual_tokens:
                     logger.warning(f"[forward_step] Token count mismatch! expected from cu_seqlens: {expected_tokens}, actual input_ids: {actual_tokens}")
-                    # ★ 修正: cu_seqlens_qの最後の値がinput_idsと一致するように調整
+                    # ★★★ FIX v3: input_ids、labels、および関連テンソルをすべて同期してトランケート ★★★
+                    # この修正により、cross_entropyでの形状不一致エラー [N] vs [M] を防止
+                    # 重要: inputsだけでなくdataも更新する（loss_funcはdataを使用するため）
                     if actual_tokens > expected_tokens:
-                        logger.warning(f"[forward_step] Truncating input_ids from {actual_tokens} to {expected_tokens}")
-                        inputs['input_ids'] = input_ids_for_model[:, :expected_tokens]
+                        logger.warning(f"[forward_step] Truncating tensors from {actual_tokens} to {expected_tokens}")
+                        
+                        # ★ input_ids をトランケート（inputs と data 両方）
+                        truncated_input_ids = input_ids_for_model[:, :expected_tokens]
+                        inputs['input_ids'] = truncated_input_ids
+                        data['input_ids'] = truncated_input_ids
+                        
+                        # ★ labels をトランケート（これが形状不一致の根本原因）
+                        if 'labels' in inputs and inputs['labels'] is not None:
+                            truncated_labels = inputs['labels'][:, :expected_tokens]
+                            inputs['labels'] = truncated_labels
+                            data['labels'] = truncated_labels
+                            logger.warning(f"[forward_step] Also truncated labels to match cu_seqlens_q")
+                        
+                        # ★ completion_mask をトランケート（dataに含まれる）
+                        if 'completion_mask' in data and data['completion_mask'] is not None:
+                            data['completion_mask'] = data['completion_mask'][:, :expected_tokens]
+                        
+                        # ★ truncated_mask をトランケート（dataに含まれる）
+                        if 'truncated_mask' in data and data['truncated_mask'] is not None:
+                            data['truncated_mask'] = data['truncated_mask'][:, :expected_tokens]
+                        
+                        # ★ advantages をトランケート（1Dの場合）
+                        if 'advantages' in data and data['advantages'] is not None:
+                            if data['advantages'].dim() == 1 and data['advantages'].shape[0] > expected_tokens:
+                                data['advantages'] = data['advantages'][:expected_tokens]
+                        
+                        # ★ position_ids をトランケート
+                        if 'position_ids' in inputs and inputs['position_ids'] is not None:
+                            truncated_pos = inputs['position_ids'][:, :expected_tokens]
+                            inputs['position_ids'] = truncated_pos
+                            data['position_ids'] = truncated_pos
+                        if 'text_position_ids' in inputs and inputs['text_position_ids'] is not None:
+                            truncated_text_pos = inputs['text_position_ids'][:, :expected_tokens]
+                            inputs['text_position_ids'] = truncated_text_pos
+                            data['text_position_ids'] = truncated_text_pos
+                        
+                        # ★ attention_mask をトランケート（2D の場合のみ）
+                        if 'attention_mask' in inputs and inputs['attention_mask'] is not None:
+                            if inputs['attention_mask'].ndim == 2:
+                                truncated_attn = inputs['attention_mask'][:, :expected_tokens]
+                                inputs['attention_mask'] = truncated_attn
+                                data['attention_mask'] = truncated_attn
+                        
+                        # ★ _grpo_token_countを更新（CHORDメタデータ）
+                        if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_tokens:
+                            data['_grpo_token_count'] = expected_tokens
+                            
+                    elif actual_tokens < expected_tokens:
+                        # input_idsがcu_seqlensより短い場合はcu_seqlensを修正
+                        logger.warning(f"[forward_step] input_ids shorter than cu_seqlens, updating cu_seqlens_q[-1] from {expected_tokens} to {actual_tokens}")
+                        psp.cu_seqlens_q[-1] = actual_tokens
+                        psp.cu_seqlens_kv[-1] = actual_tokens
         else:
             # パイプライン並列の非最初ステージではinput_idsはNone（正常動作）
             logger.debug(f"[forward_step] input_ids is None (expected for non-first pipeline stage)")

@@ -49,8 +49,11 @@ NPROC_PER_NODE=${NPROC_PER_NODE:-8}
 NUM_GENERATIONS=${NUM_GENERATIONS:-16}
 SP_SIZE=${SP_SIZE:-1}
 
+# Dynamo無効化（再コンパイル警告を抑制）
+export TORCHDYNAMO_DISABLE=1
+
 # 共通環境変数
-export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"expandable_segments:True,max_split_size_mb:32"}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"expandable_segments:True,max_split_size_mb:32,garbage_collection_threshold:0.6"}
 export TRANSFORMERS_NO_TORCHVISION=1
 export TOKENIZERS_PARALLELISM=false
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
@@ -107,6 +110,9 @@ except Exception as e:
   print("[warmup] skipped:", e)
 PY
   '
+
+export LOGLEVEL=DEBUG
+
 
 # ===== ③ 学習本体 (Megatron GRPO, vLLM colocate + DAPO 設定) =====
 srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per-node=1 --kill-on-bad-exit=1 \
@@ -182,7 +188,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --max_epochs 5 \
           --eval_interval 50 \
           --save_interval 50 \
-          --sleep_level 1 \
+          --sleep_level 2 \
           --clip_grad 0.4 \
           --lr 1e-6 \
           --lr_decay_style cosine \
