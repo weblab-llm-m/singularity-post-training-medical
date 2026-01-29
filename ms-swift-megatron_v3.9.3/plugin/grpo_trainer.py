@@ -1784,8 +1784,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     logger.info(f"[forward_step] Regenerated 2D attention_mask: shape={attn_mask_2d.shape}")
 
         # ★★★ FIX: モデル入力前の形状検証 ★★★
-        if 'input_ids' in inputs:
-            input_ids_for_model = inputs['input_ids']
+        # 注意: パイプライン並列処理では、最初のステージ以外ではinput_idsがNoneになる
+        # PP rank > 0 のランクは前のステージからpoint-to-point通信でデータを受け取る
+        input_ids_for_model = inputs.get('input_ids')
+        if input_ids_for_model is not None:
             logger.debug(f"[forward_step] Model input_ids shape: {input_ids_for_model.shape}")
             if 'packed_seq_params' in inputs and inputs['packed_seq_params'] is not None:
                 psp = inputs['packed_seq_params']
@@ -1797,6 +1799,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     if actual_tokens > expected_tokens:
                         logger.warning(f"[forward_step] Truncating input_ids from {actual_tokens} to {expected_tokens}")
                         inputs['input_ids'] = input_ids_for_model[:, :expected_tokens]
+        else:
+            # パイプライン並列の非最初ステージではinput_idsはNone（正常動作）
+            logger.debug(f"[forward_step] input_ids is None (expected for non-first pipeline stage)")
         
         with self.stimer:
             output_tensor = model(**inputs)
