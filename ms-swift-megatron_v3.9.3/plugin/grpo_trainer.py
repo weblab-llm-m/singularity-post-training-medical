@@ -731,6 +731,72 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         merged_batch['_num_sft_samples'] = num_sft_samples
         merged_batch['_grpo_token_count'] = grpo_token_count
         
+        # ★★★ FIX v8: _merge_chord_into_batch終了時にinput_idsとlabelsの長さを最終確認・同期 ★★★
+        final_input_ids = merged_batch.get('input_ids')
+        final_labels = merged_batch.get('labels')
+        
+        if final_input_ids is not None and final_labels is not None:
+            final_input_len = final_input_ids.shape[1]
+            final_labels_len = final_labels.shape[1]
+            
+            if final_input_len != final_labels_len:
+                logger.warning(f"[_merge_chord_into_batch] v8 FIX: FINAL input_ids length ({final_input_len}) != labels length ({final_labels_len})")
+                
+                target_len = min(final_input_len, final_labels_len)
+                logger.warning(f"[_merge_chord_into_batch] v8 FIX: Synchronizing all tensors to length {target_len}")
+                
+                # input_idsをトランケート
+                if final_input_len > target_len:
+                    merged_batch['input_ids'] = final_input_ids[:, :target_len]
+                
+                # labelsをトランケート
+                if final_labels_len > target_len:
+                    merged_batch['labels'] = final_labels[:, :target_len]
+                
+                # 関連テンソルをトランケート
+                for key in ['completion_mask', 'truncated_mask']:
+                    if key in merged_batch and merged_batch[key] is not None:
+                        if merged_batch[key].shape[-1] > target_len:
+                            merged_batch[key] = merged_batch[key][..., :target_len]
+                
+                # advantagesをトランケート
+                if 'advantages' in merged_batch and merged_batch['advantages'] is not None:
+                    adv = merged_batch['advantages']
+                    if adv.dim() == 1 and adv.shape[0] > target_len:
+                        merged_batch['advantages'] = adv[:target_len]
+                    elif adv.dim() == 2 and adv.shape[-1] > target_len:
+                        merged_batch['advantages'] = adv[..., :target_len]
+                
+                # position_idsをトランケート
+                for pos_key in ['position_ids', 'text_position_ids']:
+                    if pos_key in merged_batch and merged_batch[pos_key] is not None:
+                        if merged_batch[pos_key].shape[-1] > target_len:
+                            merged_batch[pos_key] = merged_batch[pos_key][..., :target_len]
+                
+                # attention_maskをトランケート
+                if 'attention_mask' in merged_batch and merged_batch['attention_mask'] is not None:
+                    attn = merged_batch['attention_mask']
+                    if attn.ndim == 2 and attn.shape[-1] > target_len:
+                        merged_batch['attention_mask'] = attn[..., :target_len]
+                    elif attn.ndim == 4 and attn.shape[-1] > target_len:
+                        merged_batch['attention_mask'] = attn[..., :target_len, :target_len]
+                
+                # packed_seq_paramsを更新
+                if merged_batch.get('packed_seq_params') is not None:
+                    psp = merged_batch['packed_seq_params']
+                    if psp.cu_seqlens_q is not None and psp.cu_seqlens_q[-1].item() > target_len:
+                        psp.cu_seqlens_q[-1] = target_len
+                        psp.cu_seqlens_kv[-1] = target_len
+                        if hasattr(psp, 'max_seqlen_q'):
+                            psp.max_seqlen_q = min(psp.max_seqlen_q, target_len)
+                        if hasattr(psp, 'max_seqlen_kv'):
+                            psp.max_seqlen_kv = min(psp.max_seqlen_kv, target_len)
+                
+                # CHORDメタデータを更新
+                merged_batch['_grpo_token_count'] = min(merged_batch['_grpo_token_count'], target_len)
+                
+                logger.warning(f"[_merge_chord_into_batch] v8 FIX: Synchronization complete")
+        
         return merged_batch
 
     def _prepare_rollout_engine(self):
@@ -1267,6 +1333,77 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 '_num_sft_samples': 0,
                 '_grpo_token_count': labels.shape[1] if not self.template.padding_free else labels.shape[1],
             })
+
+            # ★★★ FIX v8: バッチ準備段階でinput_idsとlabelsの長さを同期 ★★★
+            # パイプライン並列の最終ステージではinput_idsがNoneになるため、
+            # forward_stepでの事後的な修正では対応できない。
+            # ここでバッチ準備段階で長さを同期することで、根本的に問題を解決する。
+            batch_input_ids = encoded_batch.get('input_ids')
+            batch_labels = encoded_batch.get('labels')
+            
+            if batch_input_ids is not None and batch_labels is not None:
+                input_len = batch_input_ids.shape[1]
+                labels_len = batch_labels.shape[1]
+                
+                if input_len != labels_len:
+                    logger.warning(f"[_get_encoded_batch] v8 FIX: input_ids length ({input_len}) != labels length ({labels_len})")
+                    
+                    # 短い方に合わせる
+                    target_len = min(input_len, labels_len)
+                    logger.warning(f"[_get_encoded_batch] v8 FIX: Synchronizing all tensors to length {target_len}")
+                    
+                    # input_idsをトランケート
+                    if input_len > target_len:
+                        encoded_batch['input_ids'] = batch_input_ids[:, :target_len]
+                    
+                    # labelsをトランケート
+                    if labels_len > target_len:
+                        encoded_batch['labels'] = batch_labels[:, :target_len]
+                    
+                    # completion_maskをトランケート
+                    if encoded_batch['completion_mask'].shape[-1] > target_len:
+                        encoded_batch['completion_mask'] = encoded_batch['completion_mask'][..., :target_len]
+                    
+                    # truncated_maskをトランケート
+                    if encoded_batch['truncated_mask'].shape[-1] > target_len:
+                        encoded_batch['truncated_mask'] = encoded_batch['truncated_mask'][..., :target_len]
+                    
+                    # advantagesをトランケート
+                    adv = encoded_batch['advantages']
+                    if adv.dim() == 1 and adv.shape[0] > target_len:
+                        encoded_batch['advantages'] = adv[:target_len]
+                    elif adv.dim() == 2 and adv.shape[-1] > target_len:
+                        encoded_batch['advantages'] = adv[..., :target_len]
+                    
+                    # position_idsをトランケート
+                    for pos_key in ['position_ids', 'text_position_ids']:
+                        if pos_key in encoded_batch and encoded_batch[pos_key] is not None:
+                            if encoded_batch[pos_key].shape[-1] > target_len:
+                                encoded_batch[pos_key] = encoded_batch[pos_key][..., :target_len]
+                    
+                    # attention_maskをトランケート
+                    if 'attention_mask' in encoded_batch and encoded_batch['attention_mask'] is not None:
+                        attn = encoded_batch['attention_mask']
+                        if attn.ndim == 2 and attn.shape[-1] > target_len:
+                            encoded_batch['attention_mask'] = attn[..., :target_len]
+                        elif attn.ndim == 4 and attn.shape[-1] > target_len:
+                            encoded_batch['attention_mask'] = attn[..., :target_len, :target_len]
+                    
+                    # packed_seq_paramsを更新
+                    if 'packed_seq_params' in encoded_batch and encoded_batch['packed_seq_params'] is not None:
+                        psp = encoded_batch['packed_seq_params']
+                        if psp.cu_seqlens_q is not None and psp.cu_seqlens_q[-1].item() > target_len:
+                            psp.cu_seqlens_q[-1] = target_len
+                            psp.cu_seqlens_kv[-1] = target_len
+                            if hasattr(psp, 'max_seqlen_q'):
+                                psp.max_seqlen_q = min(psp.max_seqlen_q, target_len)
+                            if hasattr(psp, 'max_seqlen_kv'):
+                                psp.max_seqlen_kv = min(psp.max_seqlen_kv, target_len)
+                    
+                    # CHORDメタデータを更新
+                    encoded_batch['_grpo_token_count'] = target_len
+                    
+                    logger.warning(f"[_get_encoded_batch] v8 FIX: Synchronization complete")
 
             return encoded_batch
 
@@ -2027,6 +2164,51 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         else:
             # パイプライン並列の非最初ステージではinput_idsはNone（正常動作）
             logger.debug(f"[forward_step] input_ids is None (expected for non-first pipeline stage)")
+            
+            # ★★★ FIX v8: input_idsがNoneでもpacked_seq_paramsを使用してlabelsを検証 ★★★
+            # パイプライン並列の最終ステージでは、input_idsはNoneだがlabelsは必要。
+            # packed_seq_paramsのcu_seqlens_qから期待されるシーケンス長を取得し、labelsを検証する。
+            psp_for_labels = inputs.get('packed_seq_params') or data.get('packed_seq_params')
+            labels_to_check = inputs.get('labels') or data.get('labels')
+            
+            if psp_for_labels is not None and labels_to_check is not None:
+                if psp_for_labels.cu_seqlens_q is not None:
+                    expected_seq_len = psp_for_labels.cu_seqlens_q[-1].item()
+                    actual_labels_len = labels_to_check.shape[1]
+                    
+                    if actual_labels_len != expected_seq_len:
+                        logger.warning(f"[forward_step] v8 PP FIX: labels length ({actual_labels_len}) != expected from cu_seqlens ({expected_seq_len})")
+                        
+                        # labelsを期待される長さに合わせる
+                        if actual_labels_len > expected_seq_len:
+                            logger.warning(f"[forward_step] v8 PP FIX: Truncating labels from {actual_labels_len} to {expected_seq_len}")
+                            truncated_labels = labels_to_check[:, :expected_seq_len]
+                            inputs['labels'] = truncated_labels
+                            data['labels'] = truncated_labels
+                            
+                            # 関連テンソルもトランケート
+                            for key in ['completion_mask', 'truncated_mask']:
+                                if key in data and data[key] is not None and data[key].shape[-1] > expected_seq_len:
+                                    data[key] = data[key][..., :expected_seq_len]
+                            
+                            if 'advantages' in data and data['advantages'] is not None:
+                                adv = data['advantages']
+                                if adv.dim() == 1 and adv.shape[0] > expected_seq_len:
+                                    data['advantages'] = adv[:expected_seq_len]
+                                elif adv.dim() == 2 and adv.shape[-1] > expected_seq_len:
+                                    data['advantages'] = adv[..., :expected_seq_len]
+                            
+                            if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
+                                data['_grpo_token_count'] = expected_seq_len
+                        else:
+                            # labelsが短い場合はcu_seqlensを更新
+                            logger.warning(f"[forward_step] v8 PP FIX: Updating cu_seqlens from {expected_seq_len} to {actual_labels_len}")
+                            psp_for_labels.cu_seqlens_q[-1] = actual_labels_len
+                            psp_for_labels.cu_seqlens_kv[-1] = actual_labels_len
+                            if hasattr(psp_for_labels, 'max_seqlen_q'):
+                                psp_for_labels.max_seqlen_q = min(psp_for_labels.max_seqlen_q, actual_labels_len)
+                            if hasattr(psp_for_labels, 'max_seqlen_kv'):
+                                psp_for_labels.max_seqlen_kv = min(psp_for_labels.max_seqlen_kv, actual_labels_len)
         
         # ★★★ FIX v7: モデル呼び出し直前の最終安全チェック ★★★
         # v6の修正がバイパスされた場合やdataからlabelsが取得された場合に対応
