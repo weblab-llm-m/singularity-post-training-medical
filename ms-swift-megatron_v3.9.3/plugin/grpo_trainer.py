@@ -1874,6 +1874,93 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         input_ids_for_model = inputs.get('input_ids')
         if input_ids_for_model is not None:
             logger.debug(f"[forward_step] Model input_ids shape: {input_ids_for_model.shape}")
+            
+            # ★★★ FIX v6: input_idsとlabelsの長さを直接比較して同期 ★★★
+            # これはpacked_seq_paramsの有無に関係なく、常に実行する
+            # cross_entropyでの形状不一致エラー [N] vs [M] を防止する最も確実な方法
+            labels_for_check = inputs.get('labels')
+            if labels_for_check is not None:
+                input_len = input_ids_for_model.shape[1]
+                labels_len = labels_for_check.shape[1]
+                
+                if input_len != labels_len:
+                    logger.warning(f"[forward_step] CRITICAL: input_ids length ({input_len}) != labels length ({labels_len})")
+                    
+                    # 短い方に合わせる
+                    target_len = min(input_len, labels_len)
+                    logger.warning(f"[forward_step] Synchronizing all tensors to length {target_len}")
+                    
+                    # input_idsをトランケート
+                    if input_len > target_len:
+                        truncated_input_ids = input_ids_for_model[:, :target_len]
+                        inputs['input_ids'] = truncated_input_ids
+                        data['input_ids'] = truncated_input_ids
+                        input_ids_for_model = truncated_input_ids  # 後続の処理用に更新
+                        logger.warning(f"[forward_step] Truncated input_ids from {input_len} to {target_len}")
+                    
+                    # labelsをトランケート
+                    if labels_len > target_len:
+                        truncated_labels = labels_for_check[:, :target_len]
+                        inputs['labels'] = truncated_labels
+                        data['labels'] = truncated_labels
+                        logger.warning(f"[forward_step] Truncated labels from {labels_len} to {target_len}")
+                    
+                    # completion_maskをトランケート
+                    if 'completion_mask' in data and data['completion_mask'] is not None:
+                        cm = data['completion_mask']
+                        if cm.shape[-1] > target_len:
+                            data['completion_mask'] = cm[..., :target_len]
+                    
+                    # truncated_maskをトランケート
+                    if 'truncated_mask' in data and data['truncated_mask'] is not None:
+                        tm = data['truncated_mask']
+                        if tm.shape[-1] > target_len:
+                            data['truncated_mask'] = tm[..., :target_len]
+                    
+                    # advantagesをトランケート
+                    if 'advantages' in data and data['advantages'] is not None:
+                        adv = data['advantages']
+                        if adv.dim() == 1 and adv.shape[0] > target_len:
+                            data['advantages'] = adv[:target_len]
+                        elif adv.dim() == 2 and adv.shape[-1] > target_len:
+                            data['advantages'] = adv[..., :target_len]
+                    
+                    # position_idsをトランケート
+                    if 'position_ids' in inputs and inputs['position_ids'] is not None:
+                        pos = inputs['position_ids']
+                        if pos.shape[-1] > target_len:
+                            inputs['position_ids'] = pos[..., :target_len]
+                            data['position_ids'] = pos[..., :target_len]
+                    if 'text_position_ids' in inputs and inputs['text_position_ids'] is not None:
+                        tpos = inputs['text_position_ids']
+                        if tpos.shape[-1] > target_len:
+                            inputs['text_position_ids'] = tpos[..., :target_len]
+                            data['text_position_ids'] = tpos[..., :target_len]
+                    
+                    # attention_maskをトランケート
+                    if 'attention_mask' in inputs and inputs['attention_mask'] is not None:
+                        attn = inputs['attention_mask']
+                        if attn.ndim == 2 and attn.shape[-1] > target_len:
+                            inputs['attention_mask'] = attn[..., :target_len]
+                            data['attention_mask'] = attn[..., :target_len]
+                    
+                    # packed_seq_paramsも更新
+                    if 'packed_seq_params' in inputs and inputs['packed_seq_params'] is not None:
+                        psp_v6 = inputs['packed_seq_params']
+                        if psp_v6.cu_seqlens_q is not None and psp_v6.cu_seqlens_q[-1].item() > target_len:
+                            psp_v6.cu_seqlens_q[-1] = target_len
+                            psp_v6.cu_seqlens_kv[-1] = target_len
+                            if hasattr(psp_v6, 'max_seqlen_q'):
+                                psp_v6.max_seqlen_q = min(psp_v6.max_seqlen_q, target_len)
+                            if hasattr(psp_v6, 'max_seqlen_kv'):
+                                psp_v6.max_seqlen_kv = min(psp_v6.max_seqlen_kv, target_len)
+                            logger.warning(f"[forward_step] Updated packed_seq_params cu_seqlens to {target_len}")
+                    
+                    # CHORDメタデータを更新
+                    if '_grpo_token_count' in data and data['_grpo_token_count'] > target_len:
+                        data['_grpo_token_count'] = target_len
+            
+            # ★★★ 既存のpacked_seq_params検証（v4/v5から継承） ★★★
             if 'packed_seq_params' in inputs and inputs['packed_seq_params'] is not None:
                 psp = inputs['packed_seq_params']
                 expected_tokens = psp.cu_seqlens_q[-1].item() if psp.cu_seqlens_q is not None else None
