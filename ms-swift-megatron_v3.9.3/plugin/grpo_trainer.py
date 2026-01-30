@@ -1,4 +1,5 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
+import atexit
 import base64
 import gc
 import inspect
@@ -44,6 +45,22 @@ if is_wandb_available():
 
 logger = get_logger()
 
+# ★★★ FIX v5: グローバルなクリーンアップ関数 ★★★
+# プロセス終了時にCUDAメモリを適切にクリーンアップしてアロケータ競合を防止
+_cleanup_registered = False
+
+def _cleanup_cuda_memory():
+    """プロセス終了時にCUDAメモリをクリーンアップ"""
+    try:
+        torch.cuda.synchronize()
+        gc.collect()
+        torch.cuda.empty_cache()
+        # 分散プロセスグループが存在する場合は破棄
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+    except Exception as e:
+        pass  # 終了時のエラーは無視
+
 
 class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
@@ -61,6 +78,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         # ==================== CHORD初期化 ====================
         self._init_chord()
         # =====================================================
+        
+        # ★★★ FIX v5: プロセス終了時のクリーンアップを登録 ★★★
+        global _cleanup_registered
+        if not _cleanup_registered:
+            atexit.register(_cleanup_cuda_memory)
+            _cleanup_registered = True
 
     def train(self, train_dataset, val_dataset, data_collator):
         # Store dataset provider for lazy resample iterator initialization
@@ -1148,6 +1171,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         rollout_batch = self.get_local_rollout_batch(batch)
 
         rollout_batch = self._generate_completions(rollout_batch)
+        
+        # ★★★ FIX v5: vLLM推論後にメモリ分離を実行 ★★★
+        # vLLMのCUDAPluggableAllocatorで割り当てられたテンソルへの参照を完全に切断
+        # これにより、訓練フェーズでPyTorchがこれらのテンソルを解放しようとしてクラッシュすることを防止
+        torch.cuda.synchronize()
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         rewards_per_func = self._score_completions(rollout_batch)
 
@@ -1348,13 +1379,21 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 self.engine.engine.sleep(level=self.args.sleep_level)
                 aggressive_empty_cache()
                 set_expandable_segments(True)
-                # ★★★ FIX v4: CUDA同期とガベージコレクションを追加 ★★★
+                # ★★★ FIX v5: より強力なCUDA同期とメモリクリーンアップ ★★★
                 # vLLMのCUDAPluggableAllocatorとPyTorchのアロケータ間の競合を防止
                 torch.cuda.synchronize()
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
+                # 追加の同期でアロケータの状態を安定化
+                torch.cuda.synchronize()
+            
+            # ★★★ FIX v5: postprocess後にもクリーンアップ ★★★
             batch = self.postprocess_rollout_data(batch, outputs)
+            
+            # vLLMの出力への参照を明示的に削除
+            del outputs
+            gc.collect()
 
         return batch
 
@@ -1388,6 +1427,21 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             List[Dict[str, Any]]:
                 Updated samples with rollout results merged in.
         """
+        
+        # ★★★ FIX v5: vLLMから返されたテンソルを安全にクローンするヘルパー関数 ★★★
+        def _safe_clone_tensor(obj):
+            """vLLMのCUDAPluggableAllocatorで割り当てられた可能性のあるテンソルをクローン"""
+            if obj is None:
+                return None
+            if isinstance(obj, torch.Tensor):
+                # テンソルをクローンしてPyTorchの標準アロケータで管理されるようにする
+                return obj.detach().clone()
+            if isinstance(obj, (list, tuple)):
+                cloned = [_safe_clone_tensor(item) for item in obj]
+                return type(obj)(cloned) if isinstance(obj, tuple) else cloned
+            if isinstance(obj, dict):
+                return {k: _safe_clone_tensor(v) for k, v in obj.items()}
+            return obj
 
         def merge_output_input_data(input_data: Dict[str, Union[torch.Tensor, Any]], output: RolloutOutput):
             response = output.response
@@ -1401,18 +1455,21 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 messages = input_data['messages']
                 remove_response(messages)
                 messages.append({'role': 'assistant', 'content': choice.message.content})
+            
+            # ★★★ FIX v5: vLLMから返されるtoken_idsをクローンしてメモリ所有権を確立 ★★★
+            # vLLMのCUDAPluggableAllocatorで割り当てられたテンソルへの参照を切断
             # Step 2: Add token IDs and loss mask
             if output.response_token_ids:
-                input_data['response_token_ids'] = output.response_token_ids
+                input_data['response_token_ids'] = _safe_clone_tensor(output.response_token_ids)
                 if output.response_loss_mask:
-                    input_data['response_loss_mask'] = output.response_loss_mask
+                    input_data['response_loss_mask'] = _safe_clone_tensor(output.response_loss_mask)
             else:
                 # for single turn, skip tokenizer response
-                input_data['response_token_ids'] = output.response.choices[0].token_ids
+                input_data['response_token_ids'] = _safe_clone_tensor(output.response.choices[0].token_ids)
 
-            # Step 3: Attach rollout extra info
+            # Step 3: Attach rollout extra info (also clone any tensors)
             if output.rollout_infos:
-                input_data['rollout_infos'] = output.rollout_infos
+                input_data['rollout_infos'] = _safe_clone_tensor(output.rollout_infos)
 
             # Step 4: Store finish reason (used for truncation filters etc.)
             input_data['finish_reason'] = choice.finish_reason
@@ -1487,7 +1544,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             torch.distributed.all_gather_object(gathered_batch, batch, group=self.vllm_tp_group)
             batch = [p for sublist in gathered_batch for p in sublist]
 
+        # ★★★ FIX v5: vLLM推論前にCUDA同期 ★★★
+        torch.cuda.synchronize()
+        
         outputs: List[RolloutOutput] = self.engine.infer(infer_requests=batch, request_config=request_config)
+        
+        # ★★★ FIX v5: vLLM推論後にCUDA同期してメモリ状態を安定化 ★★★
+        torch.cuda.synchronize()
 
         if self.vllm_tensor_parallel_size > 1:
             outputs = outputs[start_idx:end_idx]
