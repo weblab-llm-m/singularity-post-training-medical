@@ -2168,8 +2168,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # ★★★ FIX v8: input_idsがNoneでもpacked_seq_paramsを使用してlabelsを検証 ★★★
             # パイプライン並列の最終ステージでは、input_idsはNoneだがlabelsは必要。
             # packed_seq_paramsのcu_seqlens_qから期待されるシーケンス長を取得し、labelsを検証する。
-            psp_for_labels = inputs.get('packed_seq_params') or data.get('packed_seq_params')
-            labels_to_check = inputs.get('labels') or data.get('labels')
+            # ★★★ FIX v8.1: or演算子はテンソルに対して使用できないため、明示的なNoneチェックを使用 ★★★
+            psp_for_labels = inputs.get('packed_seq_params')
+            if psp_for_labels is None:
+                psp_for_labels = data.get('packed_seq_params')
+            
+            labels_to_check = inputs.get('labels')
+            if labels_to_check is None:
+                labels_to_check = data.get('labels')
             
             if psp_for_labels is not None and labels_to_check is not None:
                 if psp_for_labels.cu_seqlens_q is not None:
