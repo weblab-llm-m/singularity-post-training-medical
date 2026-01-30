@@ -303,8 +303,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         num_grpo_samples = grpo_batch.get('num_samples', self.micro_batch_size)
         num_sft_samples = len(sft_samples)
         
-        # ★★★ FIX: CUDA同期でvLLMの処理完了を保証 ★★★
+        # ★★★ FIX v4: CUDA同期とガベージコレクションでvLLMの処理完了を保証 ★★★
+        # vLLM CUDAPluggableAllocatorとPyTorchアロケータ間の競合を防止
         torch.cuda.synchronize()
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
         
         template = self.template
         args = get_args()
@@ -316,6 +320,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         for key in list(sft_collated.keys()):
             if isinstance(sft_collated[key], torch.Tensor):
                 sft_collated[key] = sft_collated[key].detach().clone()
+        
+        # ★★★ FIX v4: GRPOバッチのテンソルもクローンしてメモリ所有権を確立 ★★★
+        # vLLMが割り当てたメモリへの参照を切断し、PyTorchの標準アロケータで管理
+        for key in list(grpo_batch.keys()):
+            if isinstance(grpo_batch[key], torch.Tensor):
+                grpo_batch[key] = grpo_batch[key].detach().clone()
         
         # GRPOの既存データを取得
         grpo_labels = grpo_batch['labels']
@@ -1305,6 +1315,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         batch = self._preprocess_inputs(batch)
         # Step 1: Wake up the engine if it's sleeping (vLLM colocate mode)
         if self.vllm_mode == 'colocate' and self.engine.inner_model_executor.is_sleeping:
+            # ★★★ FIX v4: vLLM wake_up前にPyTorchのメモリを完全にクリーンアップ ★★★
+            torch.cuda.synchronize()
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            
             wake_up_params = inspect.signature(self.engine.engine.wake_up).parameters
             # Load weights only (faster and reduces memory peak)
             kwargs = {'tags': ['weights']} if 'tags' in wake_up_params else {}
@@ -1332,6 +1348,12 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 self.engine.engine.sleep(level=self.args.sleep_level)
                 aggressive_empty_cache()
                 set_expandable_segments(True)
+                # ★★★ FIX v4: CUDA同期とガベージコレクションを追加 ★★★
+                # vLLMのCUDAPluggableAllocatorとPyTorchのアロケータ間の競合を防止
+                torch.cuda.synchronize()
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             batch = self.postprocess_rollout_data(batch, outputs)
 
         return batch
@@ -1795,7 +1817,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 actual_tokens = input_ids_for_model.shape[1]
                 if expected_tokens is not None and expected_tokens != actual_tokens:
                     logger.warning(f"[forward_step] Token count mismatch! expected from cu_seqlens: {expected_tokens}, actual input_ids: {actual_tokens}")
-                    # ★★★ FIX v3: input_ids、labels、および関連テンソルをすべて同期してトランケート ★★★
+                    # ★★★ FIX v4: input_ids、labels、および関連テンソルをすべて同期してトランケート ★★★
                     # この修正により、cross_entropyでの形状不一致エラー [N] vs [M] を防止
                     # 重要: inputsだけでなくdataも更新する（loss_funcはdataを使用するため）
                     if actual_tokens > expected_tokens:
