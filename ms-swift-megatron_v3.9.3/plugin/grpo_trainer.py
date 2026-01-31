@@ -2076,6 +2076,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
                         data['_grpo_token_count'] = expected_seq_len
                     
+                    # ★★★ v12: ref/old per_token_logps もトランケート ★★★
+                    for key in ['ref_per_token_logps', 'old_per_token_logps']:
+                        if key in data and data[key] is not None:
+                            t = data[key]
+                            if t.dim() == 1 and t.shape[0] > expected_seq_len:
+                                data[key] = t[:expected_seq_len]
+                            elif t.dim() >= 2 and t.shape[-1] > expected_seq_len:
+                                data[key] = t[..., :expected_seq_len]
+                    
                     # packed_seq_paramsも更新
                     psp = data.get('packed_seq_params')
                     if psp is not None and hasattr(psp, 'cu_seqlens_q') and psp.cu_seqlens_q is not None:
@@ -2127,6 +2136,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             pad_shape[-1] = expected_seq_len - adv.shape[-1]
                             pad_adv = torch.zeros(pad_shape, dtype=adv.dtype, device=adv.device)
                             data['advantages'] = torch.cat([adv, pad_adv], dim=-1)
+                    
+                    # ★★★ v12: ref/old per_token_logps もパディング（0 = log(1)、completion_maskでマスクされるので影響なし） ★★★
+                    for key in ['ref_per_token_logps', 'old_per_token_logps']:
+                        if key in data and data[key] is not None:
+                            t = data[key]
+                            if t.dim() == 1 and t.shape[0] < expected_seq_len:
+                                pad_t = torch.zeros(expected_seq_len - t.shape[0], dtype=t.dtype, device=t.device)
+                                data[key] = torch.cat([t, pad_t], dim=0)
+                            elif t.dim() >= 2 and t.shape[-1] < expected_seq_len:
+                                pad_shape = list(t.shape)
+                                pad_shape[-1] = expected_seq_len - t.shape[-1]
+                                pad_t = torch.zeros(pad_shape, dtype=t.dtype, device=t.device)
+                                data[key] = torch.cat([t, pad_t], dim=-1)
         
         # inputsを更新（dataから再構築）
         inputs = {
@@ -2401,6 +2423,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
                                 data['_grpo_token_count'] = expected_seq_len
                             
+                            # ★★★ v12: ref/old per_token_logps もトランケート（middle stages） ★★★
+                            for key in ['ref_per_token_logps', 'old_per_token_logps']:
+                                if key in data and data[key] is not None:
+                                    tensor = data[key]
+                                    if tensor.dim() == 1 and tensor.shape[0] > expected_seq_len:
+                                        data[key] = tensor[:expected_seq_len]
+                                    elif tensor.dim() >= 2 and tensor.shape[-1] > expected_seq_len:
+                                        data[key] = tensor[..., :expected_seq_len]
+                            
                             logger.warning(f"[forward_step] v9 PP FIX: Truncation complete")
                         else:
                             # labelsが短い場合はcu_seqlensを更新
@@ -2613,6 +2644,15 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
                         data['_grpo_token_count'] = expected_seq_len
                     
+                    # ★★★ v12: ref/old per_token_logps もトランケート（LAST STAGE） ★★★
+                    for data_key in ['ref_per_token_logps', 'old_per_token_logps']:
+                        if data_key in data and data[data_key] is not None:
+                            tensor = data[data_key]
+                            if tensor.dim() == 1 and tensor.shape[0] > expected_seq_len:
+                                data[data_key] = tensor[:expected_seq_len]
+                            elif tensor.dim() >= 2 and tensor.shape[-1] > expected_seq_len:
+                                data[data_key] = tensor[..., :expected_seq_len]
+                    
                     # packed_seq_paramsも更新
                     psp_last = inputs.get('packed_seq_params') or data.get('packed_seq_params')
                     if psp_last is not None and hasattr(psp_last, 'cu_seqlens_q') and psp_last.cu_seqlens_q is not None:
@@ -2664,6 +2704,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             pad_zeros = torch.zeros(*adv.shape[:-1], pad_len, dtype=adv.dtype, device=adv.device)
                             data['advantages'] = torch.cat([adv, pad_zeros], dim=-1)
                         logger.info(f"[forward_step] v12 LAST STAGE: Padded advantages to {expected_seq_len}")
+                    
+                    # ★★★ v12: ref/old per_token_logps もパディング（LAST STAGE） ★★★
+                    for data_key in ['ref_per_token_logps', 'old_per_token_logps']:
+                        if data_key in data and data[data_key] is not None:
+                            tensor = data[data_key]
+                            if tensor.dim() == 1 and tensor.shape[0] < expected_seq_len:
+                                pad_zeros = torch.zeros(expected_seq_len - tensor.shape[0], dtype=tensor.dtype, device=tensor.device)
+                                data[data_key] = torch.cat([tensor, pad_zeros], dim=0)
+                            elif tensor.dim() >= 2 and tensor.shape[-1] < expected_seq_len:
+                                pad_shape = list(tensor.shape)
+                                pad_shape[-1] = expected_seq_len - tensor.shape[-1]
+                                pad_zeros = torch.zeros(pad_shape, dtype=tensor.dtype, device=tensor.device)
+                                data[data_key] = torch.cat([tensor, pad_zeros], dim=-1)
                     
                     logger.warning(f"[forward_step] v12 LAST STAGE: Padding complete.")
             elif expected_seq_len is None:
