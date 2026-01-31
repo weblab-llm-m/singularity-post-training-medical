@@ -2813,7 +2813,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 grpo_ref_per_token_logps = ref_per_token_logps
             per_token_kl = (
-                torch.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1)
+                torch.exp(grpo_ref_per_token_logps - grpo_per_token_logps) - (grpo_ref_per_token_logps - grpo_per_token_logps) - 1)
 
         # old_logs処理（GRPOのみ）
         old_per_token_logps = data.get('old_per_token_logps')
@@ -2981,7 +2981,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
 
         if self.beta != 0.0:
             # Unified processing (no CP-specific logic needed)
-            kl_value = (per_token_kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+            # ★★★ v12: per_token_klはGRPO部分のみなので、grpo_completion_maskを使用 ★★★
+            kl_value = (per_token_kl * grpo_completion_mask).sum() / grpo_completion_mask.sum().clamp(min=1.0)
             avg_metric['kl'] = kl_value.clone().detach()
 
         # ★追加: CHORDメトリクス
