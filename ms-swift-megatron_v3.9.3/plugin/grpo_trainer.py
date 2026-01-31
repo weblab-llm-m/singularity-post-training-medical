@@ -2034,6 +2034,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         expected_seq_len = actual_seq_len_tensor[0].item()
         
+        # ★★★ v12: broadcast値をdataに保存（CASE 2で使用） ★★★
+        if expected_seq_len > 0:
+            data['_v12_broadcast_seq_len'] = expected_seq_len
+        
         # ★★★ v11.2: labelsを期待されるシーケンス長に同期 ★★★
         if labels_in_data is not None and expected_seq_len > 0:
             labels_is_1d = (labels_in_data.dim() == 1)
@@ -2046,7 +2050,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: labels_len ({labels_len}) != expected_seq_len ({expected_seq_len})")
                 
                 if labels_len > expected_seq_len:
-                    logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: Truncating labels from {labels_len} to {expected_seq_len}")
+                    # ★ labels が長すぎる → トランケート
+                    logger.warning(f"[forward_step] v12 PP rank {pp_rank}: Truncating labels from {labels_len} to {expected_seq_len}")
                     if labels_is_1d:
                         data['labels'] = labels_in_data[:expected_seq_len]
                     else:
@@ -2075,13 +2080,53 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     psp = data.get('packed_seq_params')
                     if psp is not None and hasattr(psp, 'cu_seqlens_q') and psp.cu_seqlens_q is not None:
                         if psp.cu_seqlens_q[-1].item() > expected_seq_len:
-                            logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: Updating cu_seqlens from {psp.cu_seqlens_q[-1].item()} to {expected_seq_len}")
+                            logger.warning(f"[forward_step] v12 PP rank {pp_rank}: Updating cu_seqlens from {psp.cu_seqlens_q[-1].item()} to {expected_seq_len}")
                             psp.cu_seqlens_q[-1] = expected_seq_len
                             psp.cu_seqlens_kv[-1] = expected_seq_len
                             if hasattr(psp, 'max_seqlen_q'):
                                 psp.max_seqlen_q = min(psp.max_seqlen_q, expected_seq_len)
                             if hasattr(psp, 'max_seqlen_kv'):
                                 psp.max_seqlen_kv = min(psp.max_seqlen_kv, expected_seq_len)
+                
+                elif labels_len < expected_seq_len:
+                    # ★★★ v12 NEW: labels が短すぎる → -100でパディング ★★★
+                    # クラッシュの根本原因: logits (= PP hidden states seq_len) > labels
+                    # モデルは input_ids 長のlogitsを生成するが、labelsがそれより短い
+                    # -100 はcross_entropyのignore_indexなので、パディング部分はloss計算に影響しない
+                    pad_len = expected_seq_len - labels_len
+                    logger.warning(f"[forward_step] v12 PP rank {pp_rank}: Padding labels from {labels_len} to {expected_seq_len} (pad={pad_len} with -100)")
+                    
+                    if labels_is_1d:
+                        pad_tensor = torch.full((pad_len,), -100, dtype=labels_in_data.dtype, device=labels_in_data.device)
+                        data['labels'] = torch.cat([labels_in_data, pad_tensor], dim=0)
+                    else:
+                        batch_size = labels_in_data.shape[0]
+                        pad_tensor = torch.full((batch_size, pad_len), -100, dtype=labels_in_data.dtype, device=labels_in_data.device)
+                        data['labels'] = torch.cat([labels_in_data, pad_tensor], dim=1)
+                    
+                    # 関連テンソルもパディング（0でパディング = マスクオフ）
+                    for key in ['completion_mask', 'truncated_mask']:
+                        if key in data and data[key] is not None:
+                            t = data[key]
+                            if t.dim() == 1 and t.shape[0] < expected_seq_len:
+                                pad_t = torch.zeros(expected_seq_len - t.shape[0], dtype=t.dtype, device=t.device)
+                                data[key] = torch.cat([t, pad_t], dim=0)
+                            elif t.dim() >= 2 and t.shape[-1] < expected_seq_len:
+                                pad_shape = list(t.shape)
+                                pad_shape[-1] = expected_seq_len - t.shape[-1]
+                                pad_t = torch.zeros(pad_shape, dtype=t.dtype, device=t.device)
+                                data[key] = torch.cat([t, pad_t], dim=-1)
+                    
+                    if 'advantages' in data and data['advantages'] is not None:
+                        adv = data['advantages']
+                        if adv.dim() == 1 and adv.shape[0] < expected_seq_len:
+                            pad_adv = torch.zeros(expected_seq_len - adv.shape[0], dtype=adv.dtype, device=adv.device)
+                            data['advantages'] = torch.cat([adv, pad_adv], dim=0)
+                        elif adv.dim() >= 2 and adv.shape[-1] < expected_seq_len:
+                            pad_shape = list(adv.shape)
+                            pad_shape[-1] = expected_seq_len - adv.shape[-1]
+                            pad_adv = torch.zeros(pad_shape, dtype=adv.dtype, device=adv.device)
+                            data['advantages'] = torch.cat([adv, pad_adv], dim=-1)
         
         # inputsを更新（dataから再構築）
         inputs = {
@@ -2505,8 +2550,13 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # 期待されるシーケンス長を複数のソースから取得
             expected_seq_len = None
             
-            # ソース1: v11で保存された実際のシーケンス長（最初のステージから伝達）
-            if '_v11_actual_seq_len' in data:
+            # ★★★ v12 PRIMARY: broadcastで受信したseq_len（最も信頼性が高い） ★★★
+            if '_v12_broadcast_seq_len' in data:
+                expected_seq_len = data['_v12_broadcast_seq_len']
+                logger.info(f"[forward_step] v12 LAST STAGE: using _v12_broadcast_seq_len={expected_seq_len}")
+            
+            # ソース1(フォールバック): v11で保存された実際のシーケンス長
+            if expected_seq_len is None and '_v11_actual_seq_len' in data:
                 expected_seq_len = data['_v11_actual_seq_len']
                 logger.info(f"[forward_step] v11 LAST STAGE: using _v11_actual_seq_len={expected_seq_len}")
             
@@ -2577,11 +2627,48 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     
                     logger.error(f"[forward_step] v11 LAST STAGE: Truncation complete.")
                 else:
-                    # labels が expected_seq_len より短い - これは別の問題
-                    logger.warning(f"[forward_step] v11 LAST STAGE: labels ({final_labels_len}) shorter than expected ({expected_seq_len})")
+                    # ★★★ v12 NEW: labels が expected_seq_len より短い → -100でパディング ★★★
+                    # これがクラッシュの根本原因: logits (= PP hidden states) のseq_len > labels のseq_len
+                    pad_len = expected_seq_len - final_labels_len
+                    logger.warning(f"[forward_step] v12 LAST STAGE: Padding labels from {final_labels_len} to {expected_seq_len} (pad={pad_len} with -100)")
+                    
+                    if labels_is_1d:
+                        pad_tensor = torch.full((pad_len,), -100, dtype=final_labels.dtype, device=final_labels.device)
+                        padded_labels = torch.cat([final_labels, pad_tensor], dim=0)
+                    else:
+                        batch_size = final_labels.shape[0]
+                        pad_tensor = torch.full((batch_size, pad_len), -100, dtype=final_labels.dtype, device=final_labels.device)
+                        padded_labels = torch.cat([final_labels, pad_tensor], dim=1)
+                    
+                    inputs['labels'] = padded_labels
+                    data['labels'] = padded_labels
+                    
+                    # 関連テンソルもパディング（0でパディング = マスクオフ）
+                    for data_key in ['completion_mask', 'truncated_mask']:
+                        if data_key in data and data[data_key] is not None:
+                            tensor = data[data_key]
+                            if tensor.dim() == 1:
+                                pad_zeros = torch.zeros(pad_len, dtype=tensor.dtype, device=tensor.device)
+                                data[data_key] = torch.cat([tensor, pad_zeros], dim=0)
+                            elif tensor.dim() >= 2:
+                                pad_zeros = torch.zeros(*tensor.shape[:-1], pad_len, dtype=tensor.dtype, device=tensor.device)
+                                data[data_key] = torch.cat([tensor, pad_zeros], dim=-1)
+                            logger.info(f"[forward_step] v12 LAST STAGE: Padded {data_key} to {expected_seq_len}")
+                    
+                    if 'advantages' in data and data['advantages'] is not None:
+                        adv = data['advantages']
+                        if adv.dim() == 1:
+                            pad_zeros = torch.zeros(pad_len, dtype=adv.dtype, device=adv.device)
+                            data['advantages'] = torch.cat([adv, pad_zeros], dim=0)
+                        elif adv.dim() >= 2:
+                            pad_zeros = torch.zeros(*adv.shape[:-1], pad_len, dtype=adv.dtype, device=adv.device)
+                            data['advantages'] = torch.cat([adv, pad_zeros], dim=-1)
+                        logger.info(f"[forward_step] v12 LAST STAGE: Padded advantages to {expected_seq_len}")
+                    
+                    logger.warning(f"[forward_step] v12 LAST STAGE: Padding complete.")
             elif expected_seq_len is None:
                 # 期待されるシーケンス長が取得できない場合
-                logger.warning(f"[forward_step] v11 LAST STAGE: Could not determine expected_seq_len, no truncation check")
+                logger.warning(f"[forward_step] v12 LAST STAGE: Could not determine expected_seq_len, no truncation/padding check")
         
         with self.stimer:
             output_tensor = model(**inputs)
