@@ -2994,7 +2994,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         mode = 'train' if self.unwrapped_models[0].training else 'eval'
 
         # Compute clipping metrics
-        completion_token_count = completion_mask.sum().clamp(min=1.0)
+        # ★★★ v12: クリッピングメトリクスはGRPO部分のみ対象なので grpo_completion_mask を使用 ★★★
+        grpo_completion_token_count = grpo_completion_mask.sum().clamp(min=1.0)
 
         if self.loss_type == 'cispo':
             # CISPO: Only track upper bound clipping
@@ -3005,18 +3006,18 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                         coef_1.squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
                 else:
                     coef_1_expanded = coef_1
-                advantages_for_metrics = advantages[-coef_1_expanded.shape[1]:]
+                advantages_for_metrics = grpo_advantages[-coef_1_expanded.shape[1]:]
                 is_cispo_clipped = (coef_1_expanded > self.epsilon_high) & (advantages_for_metrics.unsqueeze(0) > 0)
             else:
                 # 非padding-freeモード: [batch, seq_len] 形式
                 coef_1_expanded = coef_1
                 seq_len = coef_1_expanded.shape[-1]
-                if advantages.dim() == 1:
-                    advantages_for_metrics = advantages[-seq_len:].unsqueeze(0)
+                if grpo_advantages.dim() == 1:
+                    advantages_for_metrics = grpo_advantages[-seq_len:].unsqueeze(0)
                 else:
-                    advantages_for_metrics = advantages[..., -seq_len:]
+                    advantages_for_metrics = grpo_advantages[..., -seq_len:]
                 is_cispo_clipped = (coef_1_expanded > self.epsilon_high) & (advantages_for_metrics > 0)
-            cispo_clip_ratio = (is_cispo_clipped.float() * completion_mask).sum() / completion_token_count
+            cispo_clip_ratio = (is_cispo_clipped.float() * grpo_completion_mask).sum() / grpo_completion_token_count
             # Store local clip ratio, _all_reduce_metric will handle averaging across ranks
             self._metrics[mode]['cispo_clip_ratio'].append(cispo_clip_ratio)
         elif self.loss_type in ['grpo', 'bnpo', 'dr_grpo', 'dapo']:
@@ -3027,23 +3028,23 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                         torch.exp(log_importance_weights).squeeze(-1), lengths_with_padding, dim=0).unsqueeze(0)
                 else:
                     coef_1_expanded = torch.exp(log_importance_weights)
-                advantages_for_metrics = advantages[-coef_1_expanded.shape[1]:]
+                advantages_for_metrics = grpo_advantages[-coef_1_expanded.shape[1]:]
                 is_low_clipped = (coef_1_expanded < 1 - self.epsilon_low) & (advantages_for_metrics.unsqueeze(0) < 0)
                 is_high_clipped = (coef_1_expanded > 1 + self.epsilon_high) & (advantages_for_metrics.unsqueeze(0) > 0)
             else:
                 # 非padding-freeモード: [batch, seq_len] 形式
                 coef_1_expanded = torch.exp(log_importance_weights)
                 seq_len = coef_1_expanded.shape[-1]
-                if advantages.dim() == 1:
-                    advantages_for_metrics = advantages[-seq_len:].unsqueeze(0)
+                if grpo_advantages.dim() == 1:
+                    advantages_for_metrics = grpo_advantages[-seq_len:].unsqueeze(0)
                 else:
-                    advantages_for_metrics = advantages[..., -seq_len:]
+                    advantages_for_metrics = grpo_advantages[..., -seq_len:]
                 is_low_clipped = (coef_1_expanded < 1 - self.epsilon_low) & (advantages_for_metrics < 0)
                 is_high_clipped = (coef_1_expanded > 1 + self.epsilon_high) & (advantages_for_metrics > 0)
-            low_clip = (is_low_clipped.float() * completion_mask).sum() / completion_token_count
-            high_clip = (is_high_clipped.float() * completion_mask).sum() / completion_token_count
+            low_clip = (is_low_clipped.float() * grpo_completion_mask).sum() / grpo_completion_token_count
+            high_clip = (is_high_clipped.float() * grpo_completion_mask).sum() / grpo_completion_token_count
             is_region_clipped = is_low_clipped | is_high_clipped
-            clip_ratio = (is_region_clipped.float() * completion_mask).sum() / completion_token_count
+            clip_ratio = (is_region_clipped.float() * grpo_completion_mask).sum() / grpo_completion_token_count
 
             # For min/max, we need to gather values from all ranks to compute global min/max
             # For mean, let _all_reduce_metric handle averaging
