@@ -2670,8 +2670,19 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 # 期待されるシーケンス長が取得できない場合
                 logger.warning(f"[forward_step] v12 LAST STAGE: Could not determine expected_seq_len, no truncation/padding check")
         
+        # ★★★ v12: モデルが認識しないカスタムキーをinputsから除去 ★★★
+        # data と inputs が同じ辞書を参照している場合、カスタムキーがmodel(**inputs)に渡されてしまう
+        _custom_keys = [k for k in list(inputs.keys()) if k.startswith('_')]
+        _popped = {}
+        for k in _custom_keys:
+            _popped[k] = inputs.pop(k)
+        
         with self.stimer:
             output_tensor = model(**inputs)
+        
+        # ★★★ v12: popしたキーをdata側に復元（loss_funcで使用するため） ★★★
+        for k, v in _popped.items():
+            data[k] = v
         
         # ★CHORDのメタデータはdataに既に含まれている（_generate_and_score_completionsで追加済み）
         return output_tensor, partial(self.loss_func, data=data)
