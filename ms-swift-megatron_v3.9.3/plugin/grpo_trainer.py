@@ -2240,7 +2240,8 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             if hasattr(psp_for_labels, 'max_seqlen_kv'):
                                 psp_for_labels.max_seqlen_kv = min(psp_for_labels.max_seqlen_kv, actual_labels_len)
         
-        # ★★★ FIX v7: モデル呼び出し直前の最終安全チェック ★★★
+        # ★★★ FIX v10: モデル呼び出し直前の最終安全チェック（1D/2D両対応）★★★
+        # v7の修正を拡張し、packed sequence (1D) と padded sequence (2D) の両方に対応
         # v6の修正がバイパスされた場合やdataからlabelsが取得された場合に対応
         final_input_ids = inputs.get('input_ids')
         final_labels = inputs.get('labels')
@@ -2252,38 +2253,67 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             logger.warning(f"[forward_step] labels was None in inputs, copied from data")
         
         if final_input_ids is not None and final_labels is not None:
-            final_input_len = final_input_ids.shape[1]
-            final_labels_len = final_labels.shape[1]
+            # ★★★ FIX v10: 1D/2Dテンソル両方に対応 ★★★
+            # packed sequence mode: tensors are 1D [total_tokens]
+            # padded mode: tensors are 2D [batch, seq_len]
+            input_is_1d = (final_input_ids.dim() == 1)
+            labels_is_1d = (final_labels.dim() == 1)
+            
+            if input_is_1d:
+                final_input_len = final_input_ids.shape[0]
+            else:
+                final_input_len = final_input_ids.shape[1]
+            
+            if labels_is_1d:
+                final_labels_len = final_labels.shape[0]
+            else:
+                final_labels_len = final_labels.shape[1]
             
             # 最終確認ログ（常に出力）
-            logger.info(f"[forward_step] FINAL CHECK: input_ids.shape={final_input_ids.shape}, labels.shape={final_labels.shape}")
+            logger.info(f"[forward_step] v10 FINAL CHECK: input_ids.shape={final_input_ids.shape} (1d={input_is_1d}), labels.shape={final_labels.shape} (1d={labels_is_1d})")
             
             if final_input_len != final_labels_len:
-                logger.error(f"[forward_step] CRITICAL MISMATCH DETECTED at model call! input_ids: {final_input_len}, labels: {final_labels_len}")
-                logger.error(f"[forward_step] v6 fix should have caught this - applying emergency truncation")
+                logger.error(f"[forward_step] v10 CRITICAL MISMATCH DETECTED at model call! input_ids: {final_input_len}, labels: {final_labels_len}")
+                logger.error(f"[forward_step] v10 applying emergency truncation for {'1D packed' if input_is_1d else '2D padded'} sequences")
                 
                 # 緊急トランケーション
                 emergency_target_len = min(final_input_len, final_labels_len)
                 
+                # ★★★ v10: 1D/2D両対応のトランケーション ★★★
                 if final_input_len > emergency_target_len:
-                    inputs['input_ids'] = final_input_ids[:, :emergency_target_len]
+                    if input_is_1d:
+                        inputs['input_ids'] = final_input_ids[:emergency_target_len]
+                    else:
+                        inputs['input_ids'] = final_input_ids[:, :emergency_target_len]
                     data['input_ids'] = inputs['input_ids']
-                    logger.error(f"[forward_step] Emergency: truncated input_ids to {emergency_target_len}")
+                    logger.error(f"[forward_step] v10 Emergency: truncated input_ids from {final_input_len} to {emergency_target_len}")
                 
                 if final_labels_len > emergency_target_len:
-                    inputs['labels'] = final_labels[:, :emergency_target_len]
+                    if labels_is_1d:
+                        inputs['labels'] = final_labels[:emergency_target_len]
+                    else:
+                        inputs['labels'] = final_labels[:, :emergency_target_len]
                     data['labels'] = inputs['labels']
-                    logger.error(f"[forward_step] Emergency: truncated labels to {emergency_target_len}")
+                    logger.error(f"[forward_step] v10 Emergency: truncated labels from {final_labels_len} to {emergency_target_len}")
                 
-                # 関連テンソルもすべてトランケート
+                # 関連テンソルもすべてトランケート（1D/2D両対応）
                 for key in ['position_ids', 'text_position_ids']:
-                    if key in inputs and inputs[key] is not None and inputs[key].shape[-1] > emergency_target_len:
-                        inputs[key] = inputs[key][..., :emergency_target_len]
-                        data[key] = inputs[key]
+                    if key in inputs and inputs[key] is not None:
+                        tensor = inputs[key]
+                        if tensor.dim() == 1 and tensor.shape[0] > emergency_target_len:
+                            inputs[key] = tensor[:emergency_target_len]
+                            data[key] = inputs[key]
+                        elif tensor.dim() >= 2 and tensor.shape[-1] > emergency_target_len:
+                            inputs[key] = tensor[..., :emergency_target_len]
+                            data[key] = inputs[key]
                 
                 if 'attention_mask' in inputs and inputs['attention_mask'] is not None:
-                    if inputs['attention_mask'].ndim == 2 and inputs['attention_mask'].shape[-1] > emergency_target_len:
-                        inputs['attention_mask'] = inputs['attention_mask'][..., :emergency_target_len]
+                    am = inputs['attention_mask']
+                    if am.dim() == 1 and am.shape[0] > emergency_target_len:
+                        inputs['attention_mask'] = am[:emergency_target_len]
+                        data['attention_mask'] = inputs['attention_mask']
+                    elif am.dim() == 2 and am.shape[-1] > emergency_target_len:
+                        inputs['attention_mask'] = am[..., :emergency_target_len]
                         data['attention_mask'] = inputs['attention_mask']
                 
                 # packed_seq_paramsの更新
@@ -2291,6 +2321,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     psp_emergency = inputs['packed_seq_params']
                     if psp_emergency.cu_seqlens_q is not None:
                         if psp_emergency.cu_seqlens_q[-1].item() > emergency_target_len:
+                            logger.error(f"[forward_step] v10 Emergency: updating cu_seqlens_q[-1] from {psp_emergency.cu_seqlens_q[-1].item()} to {emergency_target_len}")
                             psp_emergency.cu_seqlens_q[-1] = emergency_target_len
                             psp_emergency.cu_seqlens_kv[-1] = emergency_target_len
                         if hasattr(psp_emergency, 'max_seqlen_q'):
@@ -2298,10 +2329,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                         if hasattr(psp_emergency, 'max_seqlen_kv'):
                             psp_emergency.max_seqlen_kv = min(psp_emergency.max_seqlen_kv, emergency_target_len)
                 
-                # dataの関連テンソルも更新
+                # dataの関連テンソルも更新（1D/2D両対応）
                 for data_key in ['completion_mask', 'truncated_mask']:
-                    if data_key in data and data[data_key] is not None and data[data_key].shape[-1] > emergency_target_len:
-                        data[data_key] = data[data_key][..., :emergency_target_len]
+                    if data_key in data and data[data_key] is not None:
+                        tensor = data[data_key]
+                        if tensor.dim() == 1 and tensor.shape[0] > emergency_target_len:
+                            data[data_key] = tensor[:emergency_target_len]
+                        elif tensor.dim() >= 2 and tensor.shape[-1] > emergency_target_len:
+                            data[data_key] = tensor[..., :emergency_target_len]
                 
                 if 'advantages' in data and data['advantages'] is not None:
                     adv = data['advantages']
@@ -2310,7 +2345,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     elif adv.dim() == 2 and adv.shape[-1] > emergency_target_len:
                         data['advantages'] = adv[..., :emergency_target_len]
                 
-                logger.error(f"[forward_step] Emergency truncation complete. Proceeding with model call.")
+                if '_grpo_token_count' in data and data['_grpo_token_count'] > emergency_target_len:
+                    data['_grpo_token_count'] = emergency_target_len
+                
+                logger.error(f"[forward_step] v10 Emergency truncation complete. Proceeding with model call.")
         
         with self.stimer:
             output_tensor = model(**inputs)
