@@ -1966,6 +1966,128 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     ]
         }
 
+        # ★★★ FIX v11.1: PP全ステージ間でシーケンス長を同期 ★★★
+        # 問題: 最初のステージでinput_idsがトランケートされても、最終ステージのlabelsは元の長さのまま
+        # 解決: torch.distributed.broadcastを使用して、全PPステージで同じシーケンス長を使用
+        #
+        # PP Stage Layout:
+        #   First stage (PP rank 0):  input_ids あり → seq_len を決定
+        #   Middle stages:            input_ids なし
+        #   Last stage (PP rank last): input_ids なし, labels あり → seq_len を最初のステージから受け取る
+        
+        import torch.distributed as dist
+        from megatron.core import mpu
+        
+        # PP情報を取得
+        pp_rank = mpu.get_pipeline_model_parallel_rank() if mpu.is_pipeline_parallel_initialized() else 0
+        pp_world_size = mpu.get_pipeline_model_parallel_world_size() if mpu.is_pipeline_parallel_initialized() else 1
+        is_first_pp_stage = (pp_rank == 0)
+        is_last_pp_stage = (pp_rank == pp_world_size - 1)
+        
+        # シーケンス長を保持するテンソルを作成
+        input_ids_in_data = data.get('input_ids')
+        labels_in_data = data.get('labels')
+        
+        # デバイスを決定
+        if input_ids_in_data is not None:
+            device = input_ids_in_data.device
+        elif labels_in_data is not None:
+            device = labels_in_data.device
+        else:
+            device = torch.cuda.current_device()
+        
+        # 実際のシーケンス長を計算（1D packed / 2D padded 両対応）
+        actual_seq_len_tensor = torch.zeros(1, dtype=torch.long, device=device)
+        
+        if input_ids_in_data is not None:
+            if input_ids_in_data.dim() == 1:
+                actual_seq_len_tensor[0] = input_ids_in_data.shape[0]
+            else:
+                actual_seq_len_tensor[0] = input_ids_in_data.shape[1]
+            logger.info(f"[forward_step] v11.1 PP rank {pp_rank}: input_ids seq_len = {actual_seq_len_tensor[0].item()}")
+        
+        # ★★★ v11.1: PP間でシーケンス長をブロードキャスト ★★★
+        # 最初のステージのinput_ids長を全ステージに伝播
+        if pp_world_size > 1 and mpu.is_pipeline_parallel_initialized():
+            # PPグループを取得
+            pp_group = mpu.get_pipeline_model_parallel_group()
+            
+            # 最初のステージからブロードキャスト
+            first_pp_global_rank = mpu.get_pipeline_model_parallel_first_rank()
+            
+            try:
+                dist.broadcast(actual_seq_len_tensor, src=first_pp_global_rank, group=pp_group)
+                logger.info(f"[forward_step] v11.1 PP rank {pp_rank}: broadcast received seq_len = {actual_seq_len_tensor[0].item()}")
+            except Exception as e:
+                logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: broadcast failed: {e}")
+                # ブロードキャスト失敗時は、labelsの長さを使用（フォールバック）
+                if labels_in_data is not None:
+                    if labels_in_data.dim() == 1:
+                        actual_seq_len_tensor[0] = labels_in_data.shape[0]
+                    else:
+                        actual_seq_len_tensor[0] = labels_in_data.shape[1]
+        
+        expected_seq_len = actual_seq_len_tensor[0].item()
+        
+        # ★★★ v11.1: labelsを期待されるシーケンス長に同期 ★★★
+        if labels_in_data is not None and expected_seq_len > 0:
+            labels_is_1d = (labels_in_data.dim() == 1)
+            if labels_is_1d:
+                labels_len = labels_in_data.shape[0]
+            else:
+                labels_len = labels_in_data.shape[1]
+            
+            if labels_len != expected_seq_len:
+                logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: labels_len ({labels_len}) != expected_seq_len ({expected_seq_len})")
+                
+                if labels_len > expected_seq_len:
+                    logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: Truncating labels from {labels_len} to {expected_seq_len}")
+                    if labels_is_1d:
+                        data['labels'] = labels_in_data[:expected_seq_len]
+                    else:
+                        data['labels'] = labels_in_data[:, :expected_seq_len]
+                    
+                    # 関連テンソルもトランケート
+                    for key in ['completion_mask', 'truncated_mask']:
+                        if key in data and data[key] is not None:
+                            t = data[key]
+                            if t.dim() == 1 and t.shape[0] > expected_seq_len:
+                                data[key] = t[:expected_seq_len]
+                            elif t.dim() >= 2 and t.shape[-1] > expected_seq_len:
+                                data[key] = t[..., :expected_seq_len]
+                    
+                    if 'advantages' in data and data['advantages'] is not None:
+                        adv = data['advantages']
+                        if adv.dim() == 1 and adv.shape[0] > expected_seq_len:
+                            data['advantages'] = adv[:expected_seq_len]
+                        elif adv.dim() >= 2 and adv.shape[-1] > expected_seq_len:
+                            data['advantages'] = adv[..., :expected_seq_len]
+                    
+                    if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
+                        data['_grpo_token_count'] = expected_seq_len
+                    
+                    # packed_seq_paramsも更新
+                    psp = data.get('packed_seq_params')
+                    if psp is not None and hasattr(psp, 'cu_seqlens_q') and psp.cu_seqlens_q is not None:
+                        if psp.cu_seqlens_q[-1].item() > expected_seq_len:
+                            logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: Updating cu_seqlens from {psp.cu_seqlens_q[-1].item()} to {expected_seq_len}")
+                            psp.cu_seqlens_q[-1] = expected_seq_len
+                            psp.cu_seqlens_kv[-1] = expected_seq_len
+                            if hasattr(psp, 'max_seqlen_q'):
+                                psp.max_seqlen_q = min(psp.max_seqlen_q, expected_seq_len)
+                            if hasattr(psp, 'max_seqlen_kv'):
+                                psp.max_seqlen_kv = min(psp.max_seqlen_kv, expected_seq_len)
+        
+        # inputsを更新（dataから再構築）
+        inputs = {
+            k: v for k, v in data.items() 
+            if k not in ['completion_mask', 'ref_per_token_logps', 'advantages', 
+                        'old_per_token_logps', 'truncated_mask', 'seq_lengths',
+                        '_chord_mu', '_num_grpo_samples', '_num_sft_samples', '_grpo_token_count',
+                        'attention_mask_2d'
+                    ]
+        }
+
         # ★★★ Qwen3-Next対応: attention_maskを2Dに変換 ★★★
         # Qwen3-Nextの apply_mask_to_padding_states は 2D mask [batch, seq_len] を期待
         # 4D causal mask [batch, 1, seq_len, seq_len] が渡されると失敗する
@@ -2240,9 +2362,17 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             if hasattr(psp_for_labels, 'max_seqlen_kv'):
                                 psp_for_labels.max_seqlen_kv = min(psp_for_labels.max_seqlen_kv, actual_labels_len)
         
-        # ★★★ FIX v10: モデル呼び出し直前の最終安全チェック（1D/2D両対応）★★★
-        # v7の修正を拡張し、packed sequence (1D) と padded sequence (2D) の両方に対応
-        # v6の修正がバイパスされた場合やdataからlabelsが取得された場合に対応
+        # ★★★ FIX v11: モデル呼び出し直前の最終安全チェック（PP全ステージ対応）★★★
+        # v10の修正を拡張し、パイプライン並列の最終ステージ（input_ids=None）にも対応
+        #
+        # PP Architecture:
+        #   First stage:  input_ids → hidden states (input_ids ≠ None)
+        #   Middle stages: hidden states processing (input_ids = None)
+        #   Last stage:   hidden states + labels → loss (input_ids = None, labels ≠ None)
+        #
+        # v10の問題: if final_input_ids is not None の条件により、最終ステージでスキップされる
+        # v11の解決: 最終ステージ（input_ids=None, labels≠None）用の専用チェックを追加
+        
         final_input_ids = inputs.get('input_ids')
         final_labels = inputs.get('labels')
         
@@ -2252,10 +2382,9 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             inputs['labels'] = final_labels
             logger.warning(f"[forward_step] labels was None in inputs, copied from data")
         
+        # ★★★ v11 CASE 1: 最初のステージ（input_ids ≠ None）★★★
         if final_input_ids is not None and final_labels is not None:
-            # ★★★ FIX v10: 1D/2Dテンソル両方に対応 ★★★
-            # packed sequence mode: tensors are 1D [total_tokens]
-            # padded mode: tensors are 2D [batch, seq_len]
+            # 1D/2Dテンソル両方に対応
             input_is_1d = (final_input_ids.dim() == 1)
             labels_is_1d = (final_labels.dim() == 1)
             
@@ -2269,24 +2398,28 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             else:
                 final_labels_len = final_labels.shape[1]
             
-            # 最終確認ログ（常に出力）
-            logger.info(f"[forward_step] v10 FINAL CHECK: input_ids.shape={final_input_ids.shape} (1d={input_is_1d}), labels.shape={final_labels.shape} (1d={labels_is_1d})")
+            # ★★★ v11: 実際のシーケンス長をdataに保存（PP最終ステージへの伝達用）★★★
+            # これにより、最終ステージでこの値を使用できる
+            data['_v11_actual_seq_len'] = final_input_len
+            
+            logger.info(f"[forward_step] v11 FIRST STAGE: input_ids.shape={final_input_ids.shape} (1d={input_is_1d}), labels.shape={final_labels.shape} (1d={labels_is_1d})")
+            logger.info(f"[forward_step] v11 FIRST STAGE: saved _v11_actual_seq_len={final_input_len}")
             
             if final_input_len != final_labels_len:
-                logger.error(f"[forward_step] v10 CRITICAL MISMATCH DETECTED at model call! input_ids: {final_input_len}, labels: {final_labels_len}")
-                logger.error(f"[forward_step] v10 applying emergency truncation for {'1D packed' if input_is_1d else '2D padded'} sequences")
+                logger.error(f"[forward_step] v11 FIRST STAGE MISMATCH: input_ids={final_input_len}, labels={final_labels_len}")
                 
                 # 緊急トランケーション
                 emergency_target_len = min(final_input_len, final_labels_len)
+                data['_v11_actual_seq_len'] = emergency_target_len  # 更新
                 
-                # ★★★ v10: 1D/2D両対応のトランケーション ★★★
+                # 1D/2D両対応のトランケーション
                 if final_input_len > emergency_target_len:
                     if input_is_1d:
                         inputs['input_ids'] = final_input_ids[:emergency_target_len]
                     else:
                         inputs['input_ids'] = final_input_ids[:, :emergency_target_len]
                     data['input_ids'] = inputs['input_ids']
-                    logger.error(f"[forward_step] v10 Emergency: truncated input_ids from {final_input_len} to {emergency_target_len}")
+                    logger.error(f"[forward_step] v11: truncated input_ids from {final_input_len} to {emergency_target_len}")
                 
                 if final_labels_len > emergency_target_len:
                     if labels_is_1d:
@@ -2294,7 +2427,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     else:
                         inputs['labels'] = final_labels[:, :emergency_target_len]
                     data['labels'] = inputs['labels']
-                    logger.error(f"[forward_step] v10 Emergency: truncated labels from {final_labels_len} to {emergency_target_len}")
+                    logger.error(f"[forward_step] v11: truncated labels from {final_labels_len} to {emergency_target_len}")
                 
                 # 関連テンソルもすべてトランケート（1D/2D両対応）
                 for key in ['position_ids', 'text_position_ids']:
@@ -2321,7 +2454,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     psp_emergency = inputs['packed_seq_params']
                     if psp_emergency.cu_seqlens_q is not None:
                         if psp_emergency.cu_seqlens_q[-1].item() > emergency_target_len:
-                            logger.error(f"[forward_step] v10 Emergency: updating cu_seqlens_q[-1] from {psp_emergency.cu_seqlens_q[-1].item()} to {emergency_target_len}")
+                            logger.error(f"[forward_step] v11: updating cu_seqlens_q[-1] from {psp_emergency.cu_seqlens_q[-1].item()} to {emergency_target_len}")
                             psp_emergency.cu_seqlens_q[-1] = emergency_target_len
                             psp_emergency.cu_seqlens_kv[-1] = emergency_target_len
                         if hasattr(psp_emergency, 'max_seqlen_q'):
@@ -2348,7 +2481,102 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 if '_grpo_token_count' in data and data['_grpo_token_count'] > emergency_target_len:
                     data['_grpo_token_count'] = emergency_target_len
                 
-                logger.error(f"[forward_step] v10 Emergency truncation complete. Proceeding with model call.")
+                logger.error(f"[forward_step] v11 FIRST STAGE: Emergency truncation complete.")
+        
+        # ★★★ v11 CASE 2: 最終ステージ（input_ids = None, labels ≠ None）★★★
+        # これはv10で完全にスキップされていた重要なケース！
+        # PP最終ステージでは、hidden statesが前のステージから来るが、input_idsはNone
+        # labelsだけが存在し、モデルがlogitsを生成してlossを計算する
+        elif final_input_ids is None and final_labels is not None:
+            labels_is_1d = (final_labels.dim() == 1)
+            
+            if labels_is_1d:
+                final_labels_len = final_labels.shape[0]
+            else:
+                final_labels_len = final_labels.shape[1]
+            
+            logger.warning(f"[forward_step] v11 LAST STAGE: input_ids=None, labels.shape={final_labels.shape} (len={final_labels_len})")
+            
+            # 期待されるシーケンス長を複数のソースから取得
+            expected_seq_len = None
+            
+            # ソース1: v11で保存された実際のシーケンス長（最初のステージから伝達）
+            if '_v11_actual_seq_len' in data:
+                expected_seq_len = data['_v11_actual_seq_len']
+                logger.info(f"[forward_step] v11 LAST STAGE: using _v11_actual_seq_len={expected_seq_len}")
+            
+            # ソース2: packed_seq_paramsのcu_seqlens_q（フォールバック）
+            if expected_seq_len is None:
+                psp = inputs.get('packed_seq_params') or data.get('packed_seq_params')
+                if psp is not None and hasattr(psp, 'cu_seqlens_q') and psp.cu_seqlens_q is not None:
+                    expected_seq_len = psp.cu_seqlens_q[-1].item()
+                    logger.info(f"[forward_step] v11 LAST STAGE: using cu_seqlens_q[-1]={expected_seq_len}")
+            
+            # ソース3: dataのinput_ids（別のステージで保存されていた場合）
+            if expected_seq_len is None and 'input_ids' in data and data['input_ids'] is not None:
+                data_input_ids = data['input_ids']
+                if data_input_ids.dim() == 1:
+                    expected_seq_len = data_input_ids.shape[0]
+                else:
+                    expected_seq_len = data_input_ids.shape[1]
+                logger.info(f"[forward_step] v11 LAST STAGE: using data['input_ids'] shape -> {expected_seq_len}")
+            
+            # ★★★ v11: 最終ステージでのlabelsトランケーション ★★★
+            if expected_seq_len is not None and final_labels_len != expected_seq_len:
+                logger.error(f"[forward_step] v11 LAST STAGE MISMATCH: expected={expected_seq_len}, labels={final_labels_len}")
+                
+                if final_labels_len > expected_seq_len:
+                    # labelsを期待される長さにトランケート
+                    logger.error(f"[forward_step] v11 LAST STAGE: Truncating labels from {final_labels_len} to {expected_seq_len}")
+                    
+                    if labels_is_1d:
+                        truncated_labels = final_labels[:expected_seq_len]
+                    else:
+                        truncated_labels = final_labels[:, :expected_seq_len]
+                    
+                    inputs['labels'] = truncated_labels
+                    data['labels'] = truncated_labels
+                    
+                    # 関連テンソルもトランケート（1D/2D両対応）
+                    for data_key in ['completion_mask', 'truncated_mask']:
+                        if data_key in data and data[data_key] is not None:
+                            tensor = data[data_key]
+                            if tensor.dim() == 1 and tensor.shape[0] > expected_seq_len:
+                                data[data_key] = tensor[:expected_seq_len]
+                                logger.info(f"[forward_step] v11 LAST STAGE: Truncated {data_key} to {expected_seq_len}")
+                            elif tensor.dim() >= 2 and tensor.shape[-1] > expected_seq_len:
+                                data[data_key] = tensor[..., :expected_seq_len]
+                                logger.info(f"[forward_step] v11 LAST STAGE: Truncated {data_key} to {expected_seq_len}")
+                    
+                    if 'advantages' in data and data['advantages'] is not None:
+                        adv = data['advantages']
+                        if adv.dim() == 1 and adv.shape[0] > expected_seq_len:
+                            data['advantages'] = adv[:expected_seq_len]
+                        elif adv.dim() == 2 and adv.shape[-1] > expected_seq_len:
+                            data['advantages'] = adv[..., :expected_seq_len]
+                    
+                    if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
+                        data['_grpo_token_count'] = expected_seq_len
+                    
+                    # packed_seq_paramsも更新
+                    psp_last = inputs.get('packed_seq_params') or data.get('packed_seq_params')
+                    if psp_last is not None and hasattr(psp_last, 'cu_seqlens_q') and psp_last.cu_seqlens_q is not None:
+                        if psp_last.cu_seqlens_q[-1].item() > expected_seq_len:
+                            logger.error(f"[forward_step] v11 LAST STAGE: updating cu_seqlens from {psp_last.cu_seqlens_q[-1].item()} to {expected_seq_len}")
+                            psp_last.cu_seqlens_q[-1] = expected_seq_len
+                            psp_last.cu_seqlens_kv[-1] = expected_seq_len
+                            if hasattr(psp_last, 'max_seqlen_q'):
+                                psp_last.max_seqlen_q = min(psp_last.max_seqlen_q, expected_seq_len)
+                            if hasattr(psp_last, 'max_seqlen_kv'):
+                                psp_last.max_seqlen_kv = min(psp_last.max_seqlen_kv, expected_seq_len)
+                    
+                    logger.error(f"[forward_step] v11 LAST STAGE: Truncation complete.")
+                else:
+                    # labels が expected_seq_len より短い - これは別の問題
+                    logger.warning(f"[forward_step] v11 LAST STAGE: labels ({final_labels_len}) shorter than expected ({expected_seq_len})")
+            elif expected_seq_len is None:
+                # 期待されるシーケンス長が取得できない場合
+                logger.warning(f"[forward_step] v11 LAST STAGE: Could not determine expected_seq_len, no truncation check")
         
         with self.stimer:
             output_tensor = model(**inputs)
