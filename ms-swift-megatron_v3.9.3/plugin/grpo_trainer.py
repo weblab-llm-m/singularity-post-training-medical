@@ -1966,7 +1966,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     ]
         }
 
-        # ★★★ FIX v11.1: PP全ステージ間でシーケンス長を同期 ★★★
+        # ★★★ FIX v11.2: PP全ステージ間でシーケンス長を同期 ★★★
         # 問題: 最初のステージでinput_idsがトランケートされても、最終ステージのlabelsは元の長さのまま
         # 解決: torch.distributed.broadcastを使用して、全PPステージで同じシーケンス長を使用
         #
@@ -1978,9 +1978,14 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         import torch.distributed as dist
         from megatron.core import mpu
         
-        # PP情報を取得
-        pp_rank = mpu.get_pipeline_model_parallel_rank() if mpu.is_pipeline_parallel_initialized() else 0
-        pp_world_size = mpu.get_pipeline_model_parallel_world_size() if mpu.is_pipeline_parallel_initialized() else 1
+        # PP情報を安全に取得（r0.14.0互換）
+        try:
+            pp_world_size = mpu.get_pipeline_model_parallel_world_size()
+            pp_rank = mpu.get_pipeline_model_parallel_rank()
+        except Exception:
+            pp_world_size = 1
+            pp_rank = 0
+        
         is_first_pp_stage = (pp_rank == 0)
         is_last_pp_stage = (pp_rank == pp_world_size - 1)
         
@@ -2004,22 +2009,22 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 actual_seq_len_tensor[0] = input_ids_in_data.shape[0]
             else:
                 actual_seq_len_tensor[0] = input_ids_in_data.shape[1]
-            logger.info(f"[forward_step] v11.1 PP rank {pp_rank}: input_ids seq_len = {actual_seq_len_tensor[0].item()}")
+            logger.info(f"[forward_step] v11.2 PP rank {pp_rank}: input_ids seq_len = {actual_seq_len_tensor[0].item()}")
         
-        # ★★★ v11.1: PP間でシーケンス長をブロードキャスト ★★★
+        # ★★★ v11.2: PP間でシーケンス長をブロードキャスト ★★★
         # 最初のステージのinput_ids長を全ステージに伝播
-        if pp_world_size > 1 and mpu.is_pipeline_parallel_initialized():
-            # PPグループを取得
-            pp_group = mpu.get_pipeline_model_parallel_group()
-            
-            # 最初のステージからブロードキャスト
-            first_pp_global_rank = mpu.get_pipeline_model_parallel_first_rank()
-            
+        if pp_world_size > 1:
             try:
+                # PPグループを取得
+                pp_group = mpu.get_pipeline_model_parallel_group()
+                
+                # 最初のステージからブロードキャスト
+                first_pp_global_rank = mpu.get_pipeline_model_parallel_first_rank()
+                
                 dist.broadcast(actual_seq_len_tensor, src=first_pp_global_rank, group=pp_group)
-                logger.info(f"[forward_step] v11.1 PP rank {pp_rank}: broadcast received seq_len = {actual_seq_len_tensor[0].item()}")
+                logger.info(f"[forward_step] v11.2 PP rank {pp_rank}: broadcast received seq_len = {actual_seq_len_tensor[0].item()}")
             except Exception as e:
-                logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: broadcast failed: {e}")
+                logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: broadcast failed: {e}")
                 # ブロードキャスト失敗時は、labelsの長さを使用（フォールバック）
                 if labels_in_data is not None:
                     if labels_in_data.dim() == 1:
@@ -2029,7 +2034,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         
         expected_seq_len = actual_seq_len_tensor[0].item()
         
-        # ★★★ v11.1: labelsを期待されるシーケンス長に同期 ★★★
+        # ★★★ v11.2: labelsを期待されるシーケンス長に同期 ★★★
         if labels_in_data is not None and expected_seq_len > 0:
             labels_is_1d = (labels_in_data.dim() == 1)
             if labels_is_1d:
@@ -2038,10 +2043,10 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                 labels_len = labels_in_data.shape[1]
             
             if labels_len != expected_seq_len:
-                logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: labels_len ({labels_len}) != expected_seq_len ({expected_seq_len})")
+                logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: labels_len ({labels_len}) != expected_seq_len ({expected_seq_len})")
                 
                 if labels_len > expected_seq_len:
-                    logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: Truncating labels from {labels_len} to {expected_seq_len}")
+                    logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: Truncating labels from {labels_len} to {expected_seq_len}")
                     if labels_is_1d:
                         data['labels'] = labels_in_data[:expected_seq_len]
                     else:
@@ -2070,7 +2075,7 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                     psp = data.get('packed_seq_params')
                     if psp is not None and hasattr(psp, 'cu_seqlens_q') and psp.cu_seqlens_q is not None:
                         if psp.cu_seqlens_q[-1].item() > expected_seq_len:
-                            logger.warning(f"[forward_step] v11.1 PP rank {pp_rank}: Updating cu_seqlens from {psp.cu_seqlens_q[-1].item()} to {expected_seq_len}")
+                            logger.warning(f"[forward_step] v11.2 PP rank {pp_rank}: Updating cu_seqlens from {psp.cu_seqlens_q[-1].item()} to {expected_seq_len}")
                             psp.cu_seqlens_q[-1] = expected_seq_len
                             psp.cu_seqlens_kv[-1] = expected_seq_len
                             if hasattr(psp, 'max_seqlen_q'):
