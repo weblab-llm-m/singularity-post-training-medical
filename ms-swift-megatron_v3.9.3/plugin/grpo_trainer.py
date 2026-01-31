@@ -2165,10 +2165,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             # パイプライン並列の非最初ステージではinput_idsはNone（正常動作）
             logger.debug(f"[forward_step] input_ids is None (expected for non-first pipeline stage)")
             
-            # ★★★ FIX v8: input_idsがNoneでもpacked_seq_paramsを使用してlabelsを検証 ★★★
+            # ★★★ FIX v9: input_idsがNoneでもpacked_seq_paramsを使用してlabelsを検証 ★★★
             # パイプライン並列の最終ステージでは、input_idsはNoneだがlabelsは必要。
             # packed_seq_paramsのcu_seqlens_qから期待されるシーケンス長を取得し、labelsを検証する。
-            # ★★★ FIX v8.1: or演算子はテンソルに対して使用できないため、明示的なNoneチェックを使用 ★★★
+            # v8.1から継承: or演算子はテンソルに対して使用できないため、明示的なNoneチェックを使用
+            # v9改善: 1D (packed) および 2D (padded) テンソルの両方に対応
             psp_for_labels = inputs.get('packed_seq_params')
             if psp_for_labels is None:
                 psp_for_labels = data.get('packed_seq_params')
@@ -2180,22 +2181,43 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
             if psp_for_labels is not None and labels_to_check is not None:
                 if psp_for_labels.cu_seqlens_q is not None:
                     expected_seq_len = psp_for_labels.cu_seqlens_q[-1].item()
-                    actual_labels_len = labels_to_check.shape[1]
+                    
+                    # ★★★ FIX v9: 1D/2Dテンソル両方に対応 ★★★
+                    # packed sequence mode: labels is 1D [total_tokens]
+                    # padded mode: labels is 2D [batch, seq_len]
+                    if labels_to_check.dim() == 1:
+                        actual_labels_len = labels_to_check.shape[0]
+                        labels_is_1d = True
+                        logger.debug(f"[forward_step] v9: labels is 1D with shape [{actual_labels_len}]")
+                    else:
+                        actual_labels_len = labels_to_check.shape[1]
+                        labels_is_1d = False
+                        logger.debug(f"[forward_step] v9: labels is 2D with shape {labels_to_check.shape}")
                     
                     if actual_labels_len != expected_seq_len:
-                        logger.warning(f"[forward_step] v8 PP FIX: labels length ({actual_labels_len}) != expected from cu_seqlens ({expected_seq_len})")
+                        logger.warning(f"[forward_step] v9 PP FIX: labels length ({actual_labels_len}) != expected from cu_seqlens ({expected_seq_len})")
                         
                         # labelsを期待される長さに合わせる
                         if actual_labels_len > expected_seq_len:
-                            logger.warning(f"[forward_step] v8 PP FIX: Truncating labels from {actual_labels_len} to {expected_seq_len}")
-                            truncated_labels = labels_to_check[:, :expected_seq_len]
+                            logger.warning(f"[forward_step] v9 PP FIX: Truncating labels from {actual_labels_len} to {expected_seq_len}")
+                            
+                            # ★★★ FIX v9: 1D/2D両方に対応したトランケーション ★★★
+                            if labels_is_1d:
+                                truncated_labels = labels_to_check[:expected_seq_len]
+                            else:
+                                truncated_labels = labels_to_check[:, :expected_seq_len]
+                            
                             inputs['labels'] = truncated_labels
                             data['labels'] = truncated_labels
                             
-                            # 関連テンソルもトランケート
+                            # 関連テンソルもトランケート（1D/2D両対応）
                             for key in ['completion_mask', 'truncated_mask']:
-                                if key in data and data[key] is not None and data[key].shape[-1] > expected_seq_len:
-                                    data[key] = data[key][..., :expected_seq_len]
+                                if key in data and data[key] is not None:
+                                    tensor = data[key]
+                                    if tensor.dim() == 1 and tensor.shape[0] > expected_seq_len:
+                                        data[key] = tensor[:expected_seq_len]
+                                    elif tensor.dim() >= 2 and tensor.shape[-1] > expected_seq_len:
+                                        data[key] = tensor[..., :expected_seq_len]
                             
                             if 'advantages' in data and data['advantages'] is not None:
                                 adv = data['advantages']
@@ -2206,9 +2228,11 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
                             
                             if '_grpo_token_count' in data and data['_grpo_token_count'] > expected_seq_len:
                                 data['_grpo_token_count'] = expected_seq_len
+                            
+                            logger.warning(f"[forward_step] v9 PP FIX: Truncation complete")
                         else:
                             # labelsが短い場合はcu_seqlensを更新
-                            logger.warning(f"[forward_step] v8 PP FIX: Updating cu_seqlens from {expected_seq_len} to {actual_labels_len}")
+                            logger.warning(f"[forward_step] v9 PP FIX: Updating cu_seqlens from {expected_seq_len} to {actual_labels_len}")
                             psp_for_labels.cu_seqlens_q[-1] = actual_labels_len
                             psp_for_labels.cu_seqlens_kv[-1] = actual_labels_len
                             if hasattr(psp_for_labels, 'max_seqlen_q'):
