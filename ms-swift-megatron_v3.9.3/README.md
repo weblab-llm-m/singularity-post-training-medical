@@ -50,7 +50,7 @@ git clone --branch core_r0.14.0 https://github.com/NVIDIA/Megatron-LM.git megatr
 # 4. ms-swiftを用意する
 ```bash
 cd ~/swift-RL/containers
-git clone https://github.com/modelscope/ms-swift.git
+git clone --branch release/3.11 https://github.com/modelscope/ms-swift.git
 # ms-swiftのpatchやplugin（拡張機能）を追加
 cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
@@ -75,14 +75,17 @@ HF_TOKEN="api_key"
 singularity shell --nv \
   -B "$HOME/swift-RL:$HOME/swift-RL" \
   -B "/dev/shm:/dev/shm" \
+  -B "$HOME/singularity-post-training-medical:$HOME/singularity-post-training-medical" \
   $HOME/swift-RL/containers/swift3.9.3.sif
-python tools/dataset.py
+python $HOME/singularity-post-training-medical/tools/dataset.py
 ```
 
 # 7. Modelダウンロード
 ```
 # Singularity環境入った状態で
-python tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+python $HOME/singularity-post-training-medical/tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
+# Singularityから出る
+exit
 ```
 
 # 8. 実行
