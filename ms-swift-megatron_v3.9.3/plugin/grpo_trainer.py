@@ -2791,6 +2791,33 @@ class MegatronGRPOTrainer(MegatronRLHFTrainer):
         per_token_logps = self.get_logps(
             output_tensor, labels, packed_seq_params, num_samples_for_logps, per_token=True)
 
+        # ★★★ v12: ref/old per_token_logps の seq_len を per_token_logps に動的に合わせる ★★★
+        # 根本原因: ref_per_token_logps は CHORD merge前に GRPO-only seq_len で事前計算される
+        # しかし per_token_logps は CHORD merge後の seq_len でモデルから計算される
+        # forward_step の padding は labels_len != expected_seq_len の場合のみ実行されるため、
+        # labels が既に正しい長さの場合 ref_per_token_logps がパディングされない
+        actual_seq_len = per_token_logps.shape[-1]
+        
+        ref_ptl = data.get('ref_per_token_logps')
+        if ref_ptl is not None and ref_ptl.shape[-1] != actual_seq_len:
+            if ref_ptl.shape[-1] > actual_seq_len:
+                data['ref_per_token_logps'] = ref_ptl[..., :actual_seq_len]
+            else:
+                pad_len = actual_seq_len - ref_ptl.shape[-1]
+                pad_zeros = torch.zeros(*ref_ptl.shape[:-1], pad_len, dtype=ref_ptl.dtype, device=ref_ptl.device)
+                data['ref_per_token_logps'] = torch.cat([ref_ptl, pad_zeros], dim=-1)
+            logger.info(f"[loss_func] v12: aligned ref_per_token_logps from {ref_ptl.shape[-1]} to {actual_seq_len}")
+        
+        old_ptl = data.get('old_per_token_logps')
+        if old_ptl is not None and old_ptl.shape[-1] != actual_seq_len:
+            if old_ptl.shape[-1] > actual_seq_len:
+                data['old_per_token_logps'] = old_ptl[..., :actual_seq_len]
+            else:
+                pad_len = actual_seq_len - old_ptl.shape[-1]
+                pad_zeros = torch.zeros(*old_ptl.shape[:-1], pad_len, dtype=old_ptl.dtype, device=old_ptl.device)
+                data['old_per_token_logps'] = torch.cat([old_ptl, pad_zeros], dim=-1)
+            logger.info(f"[loss_func] v12: aligned old_per_token_logps from {old_ptl.shape[-1]} to {actual_seq_len}")
+
         # ★修正: GRPO部分のみ抽出
         if grpo_token_count > 0 and num_sft_samples > 0:
             grpo_per_token_logps = per_token_logps[:, :grpo_token_count]
