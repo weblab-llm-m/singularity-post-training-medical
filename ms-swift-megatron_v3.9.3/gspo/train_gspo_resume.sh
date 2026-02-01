@@ -33,6 +33,11 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 
+# ！！！！！！！！！！！途中再開のモデルをLoadする！！！！！！！！！！！！！！！
+CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v29-20260118-182028}
+# W&Bの既存run_id（確認して設定）：https://wandb.ai/llm-m_wandb-weblab/Ramen_GRPO_GSPO_TRY/runs/uc65jnkj?nw=nwuserroze23vpa40769のuc65jnkj
+WANDB_RUN_ID=${WANDB_RUN_ID:-"xxxxxxxx"}  # 実際のrun_idに置き換え(Wandbの途中からログを再開する)
+
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -143,6 +148,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
+    --env WANDB_RESUME='allow' \
+    --env WANDB_RUN_ID="${WANDB_RUN_ID}" \
     "${SIF_FILE}" bash -lc "
       set -xeuo pipefail
       ulimit -l unlimited || true
@@ -199,7 +206,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --pipeline_model_parallel_size 24 \
           --sequence_parallel true \
           --remove_unused_columns false \
-          --load_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -211,9 +217,10 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_grouped_gemm true \
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
-          --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
+          --finetune false \
+          --no_load_optim false \
+          --no_load_rng false \
+          --load ${CHECK_POINT_PATH} \
           --global_batch_size 512 \
           --micro_batch_size 1 \
           --steps_per_generation 3 \
@@ -233,7 +240,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --log_completions false \
           --attention_backend flash \
           --padding_free true \
-          --save '${OUTPUT_DIR}' \
+          --add_version false \
+          --save '${CHECK_POINT_PATH}' \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
           --wandb_exp_name 'gspo_reward_chinese_0.3'

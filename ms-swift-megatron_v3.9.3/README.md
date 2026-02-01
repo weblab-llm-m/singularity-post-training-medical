@@ -56,6 +56,7 @@ cp $HOME/swift-RL/src/swift/patch_promptid.py $HOME/swift-RL/containers/ms-swift
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_ophtho_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/reward_chinese_plugin.py $HOME/swift-RL/containers/ms-swift/examples/train/grpo/plugin
 cp $HOME/swift-RL/src/swift/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
+# resumeを行うためにassertを解除するだけ
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/checkpointing.py $HOME/swift-RL/containers/megatron-lm-core_r0.14.0/megatron/training/checkpointing.py
 ```
 
@@ -85,7 +86,17 @@ python tools/model_download.py --model Qwen/Qwen3-Next-80B-A3B-Instruct
 ```
 
 # 8. 実行
+train_*.sh：最初の学習スクリプト（途中で止めてもよい）
+train_*_resume.sh：途中から再開する学習スクリプト
+train_*_oneshot.sh：途中で止めることを考えずに行う学習スクリプト（HFに治す必要がない）
+
 ```
 cd ~/singularity-post-training-medical/ms-swift-megatron_v3.9.3/grpo
 sbatch train_*.sh
+```
+
+# 9. mcoreからHF変換
+```
+cd ~/singularity-post-training-medical/ms-swift-megatron_v3.9.3/
+sbatch convert_mcore_to_hf.sh
 ```
