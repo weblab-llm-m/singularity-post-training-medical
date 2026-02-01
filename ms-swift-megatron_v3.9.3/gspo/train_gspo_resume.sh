@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=grpo_learn
+#SBATCH --job-name=gspo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[61-68]
+#SBATCH --nodes=12
+#SBATCH --nodelist=osk-gpu[52-60,62-64]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -32,6 +32,11 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 # GRPO 用 JSONL データ（過去IgakuQA）
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
+
+# ！！！！！！！！！！！途中再開のモデルをLoadする！！！！！！！！！！！！！！！
+CHECK_POINT_PATH=${CHECK_POINT_PATH:-$SWIFT_WORKDIR/outputs/megatron_swift_qwen_next80b/dapo_megatron_grpo_specialist_exam/v29-20260118-182028}
+# W&Bの既存run_id（確認して設定）：https://wandb.ai/llm-m_wandb-weblab/Ramen_GRPO_GSPO_TRY/runs/uc65jnkj?nw=nwuserroze23vpa40769のuc65jnkj
+WANDB_RUN_ID=${WANDB_RUN_ID:-"xxxxxxxx"}  # 実際のrun_idに置き換え(Wandbの途中からログを再開する)
 
 
 # 学習パラメータ
@@ -77,6 +82,7 @@ export MASTER_PORT=${MASTER_PORT:-29500}
 export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | awk "/default/ {print \$5}")}
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
+
 
 # ===== 軽いプリウォーム（flash-attn ビルド） =====
 srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
@@ -139,9 +145,11 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
-    --env WANDB_DIR=${OUTPUT_DIR} \
+    --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
+    --env WANDB_RESUME='allow' \
+    --env WANDB_RUN_ID="${WANDB_RUN_ID}" \
     "${SIF_FILE}" bash -lc "
       set -xeuo pipefail
       ulimit -l unlimited || true
@@ -167,10 +175,14 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --beta 0.05 \
+          --importance_sampling_level sequence \
+          --epsilon 3e-4 \
+          --epsilon_high 4e-4 \
+          --beta 0.1 \
+          --steps_per_generation 4 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \
-          --reward_weights 1.5 1.0 \
+          --reward_weights 1.5 0.3 \
           --soft_cache_length 1024 \
           --max_epochs 5 \
           --eval_interval 50 \
@@ -190,11 +202,10 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --torch_dtype ${DTYPE} \
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
-          --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 8 \
+          --expert_model_parallel_size 4 \
+          --pipeline_model_parallel_size 24 \
           --sequence_parallel true \
           --remove_unused_columns false \
-          --load_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -206,12 +217,13 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_grouped_gemm true \
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
-          --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
+          --finetune false \
+          --no_load_optim false \
+          --no_load_rng false \
+          --load ${CHECK_POINT_PATH} \
           --global_batch_size 512 \
           --micro_batch_size 1 \
-          --steps_per_generation 5 \
+          --steps_per_generation 3 \
           --num_generations ${NUM_GENERATIONS} \
           --max_length ${MAX_MODEL_LEN} \
           --max_completion_length ${MAX_COMPLETION_LEN} \
@@ -223,14 +235,14 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
           --padding_free true \
-          --save '${OUTPUT_DIR}' \
+          --add_version false \
+          --save '${CHECK_POINT_PATH}' \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs_resume'
+          --wandb_exp_name 'gspo_reward_chinese_0.3'
     "
-
-# --save_safetensors trueでsafetensorsで保存する
-# --log_completions trueでWandbで推論結果を出力させる
