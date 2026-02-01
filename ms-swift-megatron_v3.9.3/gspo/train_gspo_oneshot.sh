@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=grpo_learn
+#SBATCH --job-name=gspo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[61-68]
+#SBATCH --nodes=12
+#SBATCH --nodelist=osk-gpu[52-60,62-64]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -78,6 +78,7 @@ export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | 
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
 
+
 # ===== 軽いプリウォーム（flash-attn ビルド） =====
 srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
   -B "${CUDA_HOME}:${CUDA_HOME}" \
@@ -139,7 +140,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
-    --env WANDB_DIR=${OUTPUT_DIR} \
+    --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
     "${SIF_FILE}" bash -lc "
@@ -167,12 +168,16 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --beta 0.05 \
+          --importance_sampling_level sequence \
+          --epsilon 3e-4 \
+          --epsilon_high 4e-4 \
+          --beta 0.1 \
+          --steps_per_generation 4 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \
-          --reward_weights 1.5 1.0 \
+          --reward_weights 1.5 0.3 \
           --soft_cache_length 1024 \
-          --max_epochs 5 \
+          --max_epochs 1 \
           --eval_interval 50 \
           --save_interval 50 \
           --sleep_level 1 \
@@ -190,11 +195,12 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --torch_dtype ${DTYPE} \
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
-          --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 8 \
+          --expert_model_parallel_size 4 \
+          --pipeline_model_parallel_size 24 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
+          --save_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -207,11 +213,9 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
           --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
           --global_batch_size 512 \
           --micro_batch_size 1 \
-          --steps_per_generation 5 \
+          --steps_per_generation 3 \
           --num_generations ${NUM_GENERATIONS} \
           --max_length ${MAX_MODEL_LEN} \
           --max_completion_length ${MAX_COMPLETION_LEN} \
@@ -223,14 +227,15 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
           --padding_free true \
           --save '${OUTPUT_DIR}' \
+          --no_save_optim \
+          --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'grpo_reward_chinese_1.0_5epochs_resume'
+          --wandb_exp_name 'gspo_reward_chinese_0.3'
     "
-
-# --save_safetensors trueでsafetensorsで保存する
-# --log_completions trueでWandbで推論結果を出力させる
