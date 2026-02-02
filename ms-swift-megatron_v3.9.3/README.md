@@ -93,9 +93,9 @@ exit
 ```
 
 # 8. 実行
-train_*.sh：最初の学習スクリプト（途中で止めてもよい）
-train_*_resume.sh：途中から再開する学習スクリプト
-train_*_oneshot.sh：途中で止めることを考えずに行う学習スクリプト（HFに治す必要がない）
+- train_*.sh：最初の学習スクリプト（途中で止めてもよい）
+- train_*_resume.sh：途中から再開する学習スクリプト（WandbのIDや学習途中パス）
+- train_*_oneshot.sh：途中で止めることを考えずに行う学習スクリプト（HFに直す必要がない）
 
 ```
 cd ~/singularity-post-training-medical/ms-swift-megatron_v3.9.3/grpo
