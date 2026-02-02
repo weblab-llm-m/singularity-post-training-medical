@@ -208,6 +208,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
+          --save_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -220,8 +221,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
           --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
           --global_batch_size 512 \
           --micro_batch_size 1 \
           --steps_per_generation 5 \
@@ -236,6 +235,8 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
           --padding_free false \
