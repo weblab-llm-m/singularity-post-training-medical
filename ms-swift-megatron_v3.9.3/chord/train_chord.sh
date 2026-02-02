@@ -230,7 +230,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --max_completion_length ${MAX_COMPLETION_LEN} \
           --use_vllm true \
           --vllm_mode colocate \
-          --vllm_gpu_memory_utilization 0.25 \
+          --vllm_gpu_memory_utilization 0.3 \
           --vllm_tensor_parallel_size 8 \
           --vllm_max_model_len ${MAX_MODEL_LEN} \
           --temperature 0.9 \
