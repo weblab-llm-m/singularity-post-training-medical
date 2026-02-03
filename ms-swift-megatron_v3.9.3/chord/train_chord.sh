@@ -240,8 +240,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --attention_backend flash \
           --padding_free false \
           --save '${OUTPUT_DIR}' \
-          --no_save_optim \
-          --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
           --wandb_exp_name 'chord_grpo_reward_chinese_1.0_5epochs'
