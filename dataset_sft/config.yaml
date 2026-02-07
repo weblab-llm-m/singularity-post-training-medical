@@ -1,0 +1,53 @@
+# ===========================================
+# モデル設定
+# ===========================================
+model_name: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+model_id: "Qwen3-Next-80B"
+
+# ===========================================
+# vLLMサーバー設定
+# ===========================================
+tensor_parallel_size: 4
+pipeline_parallel_size: 2
+gpu_memory_utilization: 0.90
+max_model_len: 32768
+extra_args: "--enable-chunked-prefill --max-num-seqs 64"
+vllm_port: 8001
+waittime: 1200
+
+# ===========================================
+# データセット設定
+# ===========================================
+dataset_name: "weblab-LLM-M/igakuqa-2001-2024-filtered"
+dataset_split: "train"
+# prepare_data.pyで前処理済みのJSONLパス
+input_path: "data/igakuqa_filtered.jsonl"
+
+# フィルタ設定（prepare_data.py用）
+exclude_years:
+  - 2023
+  - 2024
+
+# ===========================================
+# SFT生成プロンプト設定
+# ===========================================
+system_prompt: |
+  あなたは日本の医師国家試験に精通した医学教育の専門家です。
+  医学的に正確で、根拠に基づいた詳細な解説を日本語で提供してください。
+
+answer_style: "detailed"  # "detailed" or "concise"
+
+# ===========================================
+# 生成パラメータ
+# ===========================================
+base_url: "http://localhost:8001/v1"
+api_key: "dummy"
+max_completion_tokens: 4096
+temperature: 0.3
+top_p: 0.95
+num_workers: 30  # 同時リクエスト数
+
+# ===========================================
+# 出力設定
+# ===========================================
+output_path: "output/sft_igakuqa.jsonl"
