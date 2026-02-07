@@ -1,16 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=sft_datagen_8node
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[61-68]
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
-#SBATCH --cpus-per-task=240
+#SBATCH --cpus-per-task=120
 #SBATCH --time=48:00:00
-#SBATCH --mem=1200G
+#SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --output=%x-%A_%a.out
-#SBATCH --error=%x-%A_%a.err
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
 
 # ===========================================================
 # 8ノード並列SFTデータ生成
@@ -27,10 +26,18 @@
 
 set -euo pipefail
 
-SHARD_INDEX=${SLURM_ARRAY_TASK_ID}
+SHARD_INDEX=${SHARD_INDEX:?"SHARD_INDEX must be set via submit_all.sh"}
 NUM_SHARDS=8
-CONFIG_NAME="${1:-config_sft}"
+CONFIG_NAME="${1:-config}"
 CONFIG_FILE="conf/${CONFIG_NAME}.yaml"
+
+
+bash /home/matsuolab/scripts/cleanup_ram.sh
+# 残留プロセスのクリーンアップ
+pkill -f "vllm.entrypoints" 2>/dev/null || true
+sleep 5
+# GPU メモリ解放確認
+nvidia-smi --gpu-reset 2>/dev/null || true
 
 echo "========================================"
 echo "Shard ${SHARD_INDEX}/${NUM_SHARDS} on $(hostname)"
@@ -106,7 +113,7 @@ vllm serve "$MODEL_NAME" \
     --disable-custom-all-reduce \
     --trust-remote-code \
     $EXTRA \
-    > "logs/vllm_shard${SHARD_INDEX}_${SLURM_ARRAY_JOB_ID}.log" 2>&1 &
+    > "logs/vllm_shard${SHARD_INDEX}_${SLURM_JOB_ID}log" 2>&1 &
 
 VLLM_PID=$!
 
@@ -119,7 +126,7 @@ while true; do
     fi
     if ! kill -0 $VLLM_PID 2>/dev/null; then
         echo "ERROR: vLLM異常終了 (shard=${SHARD_INDEX})"
-        tail -30 "logs/vllm_shard${SHARD_INDEX}_${SLURM_ARRAY_JOB_ID}.log"
+        tail -30 "logs/vllm_shard${SHARD_INDEX}_${SLURM_JOB_ID}log"
         exit 1
     fi
     if [ $elapsed -ge $WAIT_MAX ]; then
@@ -146,7 +153,7 @@ python generate_sft.py \
     hydra.job.chdir=false \
     hydra/job_logging=none \
     hydra/hydra_logging=none \
-    2>&1 | tee "logs/generate_shard${SHARD_INDEX}_${SLURM_ARRAY_JOB_ID}.log"
+    2>&1 | tee "logs/generate_shard${SHARD_INDEX}_${SLURM_JOB_ID}log"
 
 # --- クリーンアップ ---
 kill $VLLM_PID 2>/dev/null || true
