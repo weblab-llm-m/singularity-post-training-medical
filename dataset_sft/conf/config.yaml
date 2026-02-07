@@ -9,11 +9,11 @@ model_id: "Qwen3-Next-80B"
 # ===========================================
 tensor_parallel_size: 4
 pipeline_parallel_size: 2
-gpu_memory_utilization: 0.90
+gpu_memory_utilization: 0.85
 max_model_len: 32768
-extra_args: "--enable-chunked-prefill --max-num-seqs 64"
 vllm_port: 8001
 waittime: 1200
+extra_args: "--max-num-seqs 64 --enable-chunked-prefill --enforce-eager"
 
 # ===========================================
 # データセット設定
