@@ -1,383 +1,0 @@
-===================================================
-Full SPT Experiment for Medical Term Head
-===================================================
-
-Experiment Configuration:
-  Base model: /home/Competition2025/P05/shareP05/models/Qwen3-14B
-  Data: /home/Competition2025/P05/shareP05/data/gynecology_guideline_2023_some_models_correct_formatted/train.parquet
-  Evaluation samples: 100
-  Medical Term Heads: 1 (Layer 28, Head 32)
-
-
-Step 1: Evaluating Base Model
----------------------------------------------------
-Running: python3 Phase5_pinpoint_tuning/evaluate_model.py         --model_path /home/Competition2025/P05/shareP05/models/Qwen3-14B         --data_path /home/Competition2025/P05/shareP05/data/gynecology_guideline_2023_some_models_correct_formatted/train.parquet         --output_path Phase5_pinpoint_tuning/results/base_model_evaluation.json         --max_samples 100
-`torch_dtype` is deprecated! Use `dtype` instead!
-Loading model from /home/Competition2025/P05/shareP05/models/Qwen3-14B...
-Loading checkpoint shards:   0%|          | 0/8 [00:00<?, ?it/s]Loading checkpoint shards:  12%|█▎        | 1/8 [00:01<00:12,  1.81s/it]Loading checkpoint shards:  25%|██▌       | 2/8 [00:03<00:11,  1.84s/it]Loading checkpoint shards:  38%|███▊      | 3/8 [00:05<00:09,  1.91s/it]Loading checkpoint shards:  50%|█████     | 4/8 [00:07<00:07,  1.82s/it]Loading checkpoint shards:  62%|██████▎   | 5/8 [00:09<00:05,  1.77s/it]Loading checkpoint shards:  75%|███████▌  | 6/8 [00:10<00:03,  1.77s/it]Loading checkpoint shards:  88%|████████▊ | 7/8 [00:12<00:01,  1.80s/it]Loading checkpoint shards: 100%|██████████| 8/8 [00:13<00:00,  1.49s/it]Loading checkpoint shards: 100%|██████████| 8/8 [00:13<00:00,  1.69s/it]
-Loading data from /home/Competition2025/P05/shareP05/data/gynecology_guideline_2023_some_models_correct_formatted/train.parquet...
-Evaluating on 100 samples...
-Evaluating:   0%|          | 0/100 [00:00<?, ?it/s]The following generation flags are not valid and may be ignored: ['top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
-Evaluating:   1%|          | 1/100 [00:24<40:14, 24.39s/it]Evaluating:   2%|▏         | 2/100 [00:47<38:58, 23.86s/it]Evaluating:   3%|▎         | 3/100 [01:11<38:20, 23.72s/it]Evaluating:   4%|▍         | 4/100 [01:34<37:49, 23.64s/it]Evaluating:   5%|▌         | 5/100 [01:58<37:22, 23.61s/it]Evaluating:   6%|▌         | 6/100 [02:22<36:57, 23.59s/it]Evaluating:   7%|▋         | 7/100 [02:45<36:29, 23.54s/it]Evaluating:   8%|▊         | 8/100 [03:08<36:03, 23.51s/it]Evaluating:   9%|▉         | 9/100 [03:32<35:40, 23.52s/it]Evaluating:  10%|█         | 10/100 [03:56<35:17, 23.52s/it]Evaluating:  11%|█         | 11/100 [04:19<34:54, 23.53s/it]Evaluating:  12%|█▏        | 12/100 [04:43<34:32, 23.55s/it]Evaluating:  13%|█▎        | 13/100 [05:06<34:09, 23.56s/it]Evaluating:  14%|█▍        | 14/100 [05:30<33:48, 23.58s/it]Evaluating:  15%|█▌        | 15/100 [05:53<33:21, 23.55s/it]Evaluating:  16%|█▌        | 16/100 [06:17<32:56, 23.52s/it]Evaluating:  17%|█▋        | 17/100 [06:40<32:32, 23.53s/it]Evaluating:  18%|█▊        | 18/100 [07:04<32:09, 23.53s/it]Evaluating:  19%|█▉        | 19/100 [07:27<31:45, 23.52s/it]Evaluating:  20%|██        | 20/100 [07:51<31:22, 23.53s/it]Evaluating:  21%|██        | 21/100 [08:15<30:59, 23.54s/it]Evaluating:  22%|██▏       | 22/100 [08:38<30:35, 23.54s/it]Evaluating:  23%|██▎       | 23/100 [09:02<30:12, 23.53s/it]Evaluating:  24%|██▍       | 24/100 [09:25<29:49, 23.54s/it]Evaluating:  25%|██▌       | 25/100 [09:49<29:27, 23.56s/it]Evaluating:  26%|██▌       | 26/100 [10:12<29:04, 23.58s/it]Evaluating:  27%|██▋       | 27/100 [10:36<28:40, 23.57s/it]Evaluating:  28%|██▊       | 28/100 [11:00<28:18, 23.59s/it]Evaluating:  29%|██▉       | 29/100 [11:23<27:56, 23.61s/it]Evaluating:  30%|███       | 30/100 [11:47<27:31, 23.59s/it]Evaluating:  31%|███       | 31/100 [12:10<27:05, 23.56s/it]Evaluating:  32%|███▏      | 32/100 [12:34<26:41, 23.55s/it]Evaluating:  33%|███▎      | 33/100 [12:57<26:18, 23.56s/it]Evaluating:  34%|███▍      | 34/100 [13:21<25:54, 23.56s/it]Evaluating:  35%|███▌      | 35/100 [13:44<25:31, 23.56s/it]Evaluating:  36%|███▌      | 36/100 [14:08<25:08, 23.57s/it]Evaluating:  37%|███▋      | 37/100 [14:32<24:47, 23.61s/it]Evaluating:  38%|███▊      | 38/100 [14:55<24:23, 23.60s/it]Evaluating:  39%|███▉      | 39/100 [15:18<23:50, 23.45s/it]Evaluating:  40%|████      | 40/100 [15:42<23:27, 23.46s/it]Evaluating:  41%|████      | 41/100 [16:05<23:06, 23.50s/it]Evaluating:  42%|████▏     | 42/100 [16:29<22:44, 23.53s/it]Evaluating:  43%|████▎     | 43/100 [16:53<22:21, 23.54s/it]Evaluating:  44%|████▍     | 44/100 [17:16<21:59, 23.56s/it]Evaluating:  45%|████▌     | 45/100 [17:40<21:36, 23.58s/it]Evaluating:  46%|████▌     | 46/100 [18:03<21:13, 23.58s/it]Evaluating:  47%|████▋     | 47/100 [18:27<20:48, 23.55s/it]Evaluating:  48%|████▊     | 48/100 [18:50<20:23, 23.53s/it]Evaluating:  49%|████▉     | 49/100 [19:14<20:00, 23.54s/it]Evaluating:  50%|█████     | 50/100 [19:38<19:38, 23.56s/it]Evaluating:  51%|█████     | 51/100 [20:01<19:15, 23.59s/it]Evaluating:  52%|█████▏    | 52/100 [20:25<18:52, 23.60s/it]Evaluating:  53%|█████▎    | 53/100 [20:48<18:29, 23.60s/it]Evaluating:  54%|█████▍    | 54/100 [21:12<18:05, 23.59s/it]Evaluating:  55%|█████▌    | 55/100 [21:36<17:40, 23.56s/it]Evaluating:  56%|█████▌    | 56/100 [21:59<17:15, 23.54s/it]Evaluating:  57%|█████▋    | 57/100 [22:23<16:52, 23.54s/it]Evaluating:  58%|█████▊    | 58/100 [22:46<16:28, 23.54s/it]Evaluating:  59%|█████▉    | 59/100 [23:10<16:05, 23.56s/it]Evaluating:  60%|██████    | 60/100 [23:33<15:42, 23.55s/it]Evaluating:  61%|██████    | 61/100 [23:57<15:19, 23.57s/it]Evaluating:  62%|██████▏   | 62/100 [24:20<14:55, 23.57s/it]Evaluating:  63%|██████▎   | 63/100 [24:44<14:32, 23.57s/it]Evaluating:  64%|██████▍   | 64/100 [25:08<14:08, 23.57s/it]Evaluating:  65%|██████▌   | 65/100 [25:31<13:45, 23.59s/it]Evaluating:  66%|██████▌   | 66/100 [25:55<13:21, 23.57s/it]Evaluating:  67%|██████▋   | 67/100 [26:18<12:58, 23.58s/it]Evaluating:  68%|██████▊   | 68/100 [26:42<12:34, 23.56s/it]Evaluating:  69%|██████▉   | 69/100 [27:06<12:11, 23.61s/it]Evaluating:  70%|███████   | 70/100 [27:29<11:47, 23.57s/it]Evaluating:  71%|███████   | 71/100 [27:52<11:22, 23.52s/it]Evaluating:  72%|███████▏  | 72/100 [28:16<10:58, 23.52s/it]Evaluating:  73%|███████▎  | 73/100 [28:40<10:35, 23.52s/it]Evaluating:  74%|███████▍  | 74/100 [29:03<10:11, 23.52s/it]Evaluating:  75%|███████▌  | 75/100 [29:27<09:47, 23.52s/it]Evaluating:  76%|███████▌  | 76/100 [29:50<09:24, 23.54s/it]Evaluating:  77%|███████▋  | 77/100 [30:14<09:01, 23.55s/it]Evaluating:  78%|███████▊  | 78/100 [30:37<08:38, 23.55s/it]Evaluating:  79%|███████▉  | 79/100 [31:01<08:13, 23.52s/it]Evaluating:  80%|████████  | 80/100 [31:24<07:50, 23.50s/it]Evaluating:  81%|████████  | 81/100 [31:48<07:26, 23.50s/it]Evaluating:  82%|████████▏ | 82/100 [32:11<07:03, 23.51s/it]Evaluating:  83%|████████▎ | 83/100 [32:35<06:39, 23.51s/it]Evaluating:  84%|████████▍ | 84/100 [32:58<06:16, 23.53s/it]Evaluating:  85%|████████▌ | 85/100 [33:22<05:53, 23.54s/it]Evaluating:  86%|████████▌ | 86/100 [33:45<05:29, 23.52s/it]Evaluating:  87%|████████▋ | 87/100 [34:09<05:05, 23.51s/it]Evaluating:  88%|████████▊ | 88/100 [34:32<04:41, 23.50s/it]Evaluating:  89%|████████▉ | 89/100 [34:56<04:18, 23.49s/it]Evaluating:  90%|█████████ | 90/100 [35:19<03:54, 23.50s/it]Evaluating:  91%|█████████ | 91/100 [35:43<03:31, 23.50s/it]Evaluating:  92%|█████████▏| 92/100 [36:06<03:08, 23.52s/it]Evaluating:  93%|█████████▎| 93/100 [36:30<02:44, 23.55s/it]Evaluating:  94%|█████████▍| 94/100 [36:54<02:21, 23.55s/it]Evaluating:  95%|█████████▌| 95/100 [37:17<01:57, 23.52s/it]Evaluating:  96%|█████████▌| 96/100 [37:40<01:34, 23.51s/it]Evaluating:  97%|█████████▋| 97/100 [38:04<01:10, 23.51s/it]Evaluating:  98%|█████████▊| 98/100 [38:28<00:47, 23.52s/it]Evaluating:  99%|█████████▉| 99/100 [38:51<00:23, 23.54s/it]Evaluating: 100%|██████████| 100/100 [39:15<00:00, 23.54s/it]Evaluating: 100%|██████████| 100/100 [39:15<00:00, 23.55s/it]
-Progress: 10 samples, Accuracy: 0.00%
-Progress: 20 samples, Accuracy: 0.00%
-Progress: 30 samples, Accuracy: 0.00%
-Progress: 40 samples, Accuracy: 0.00%
-Progress: 50 samples, Accuracy: 0.00%
-Progress: 60 samples, Accuracy: 0.00%
-Progress: 70 samples, Accuracy: 0.00%
-Progress: 80 samples, Accuracy: 0.00%
-Progress: 90 samples, Accuracy: 0.00%
-Progress: 100 samples, Accuracy: 0.00%
-
-==================================================
-Evaluation Results:
-  Total samples: 100
-  Correct: 0
-  Accuracy: 0.00%
-==================================================
-
-Detailed results saved to Phase5_pinpoint_tuning/results/base_model_evaluation.json
-
-Base model evaluation completed!
-  Results saved to: Phase5_pinpoint_tuning/results/base_model_evaluation.json
-
-Step 2: Running SPT Training
----------------------------------------------------
-===================================================
-SPT Training for Medical Term Head
-===================================================
-
-Configuration:
-  Model: /home/Competition2025/P05/shareP05/models/Qwen3-14B
-  Trainable heads: 1 Medical Term Head (Layer 28, Head 32)
-  Train data: /home/Competition2025/P05/shareP05/data/gynecology_guideline_2023_some_models_correct_formatted/train.parquet
-  Samples: All (1761)
-
-Starting SPT training...
-  Output dir: /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/spt_medical_term_output
-  Precise level: 4
-  Epochs: 2
-  Learning rate: 2e-4
-  Batch size: 2
-  Gradient accumulation: 8
-  Effective batch size: 16
-  Max sequence length: 1024
-
-Command: python3 /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/run_spt_medical.py --model_path /home/Competition2025/P05/shareP05/models/Qwen3-14B --data_path /home/Competition2025/P05/shareP05/data/gynecology_guideline_2023_some_models_correct_formatted/train.parquet --output_dir /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/spt_medical_term_output --cache_dir /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/cache --path_patching_path /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/trainable_heads_medical_term.json --precise_level 4 --attn_implementation eager --torch_dtype bfloat16 --max_seq_length 1024 --per_device_train_batch_size 2 --gradient_accumulation_steps 8 --learning_rate 2e-4 --num_train_epochs 2 --save_strategy epoch --save_total_limit 1 --logging_steps 20 --warmup_ratio 0.1 --lr_scheduler_type cosine --bf16 true --gradient_checkpointing false --seed 42 --dataloader_num_workers 4
-
-[INFO|training_args.py:2222] 2025-10-23 21:01:26,616 >> PyTorch: setting up devices
-[INFO|training_args.py:1881] 2025-10-23 21:01:26,806 >> The default value for the training argument `--report_to` will change in v5 (from all installed integrations to none). In v5, you will need to use `--report_to all` to get the same behavior as now. You should start updating your code and make this info disappear :-).
-Process rank: 0, device: cuda:0, n_gpu: 8, distributed training: True, 16-bits training: False
-[INFO|configuration_utils.py:763] 2025-10-23 21:01:26,810 >> loading configuration file /home/Competition2025/P05/shareP05/models/Qwen3-14B/config.json
-[INFO|configuration_utils.py:839] 2025-10-23 21:01:26,816 >> Model config Qwen3Config {
-  "architectures": [
-    "Qwen3ForCausalLM"
-  ],
-  "attention_bias": false,
-  "attention_dropout": 0.0,
-  "bos_token_id": 151643,
-  "dtype": "bfloat16",
-  "eos_token_id": 151645,
-  "head_dim": 128,
-  "hidden_act": "silu",
-  "hidden_size": 5120,
-  "initializer_range": 0.02,
-  "intermediate_size": 17408,
-  "layer_types": [
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention"
-  ],
-  "max_position_embeddings": 40960,
-  "max_window_layers": 40,
-  "model_type": "qwen3",
-  "num_attention_heads": 40,
-  "num_hidden_layers": 40,
-  "num_key_value_heads": 8,
-  "rms_norm_eps": 1e-06,
-  "rope_scaling": null,
-  "rope_theta": 1000000,
-  "sliding_window": null,
-  "tie_word_embeddings": false,
-  "transformers_version": "4.57.1",
-  "use_cache": true,
-  "use_sliding_window": false,
-  "vocab_size": 151936
-}
-
-[INFO|configuration_utils.py:763] 2025-10-23 21:01:26,824 >> loading configuration file /home/Competition2025/P05/shareP05/models/Qwen3-14B/config.json
-[WARNING|logging.py:328] 2025-10-23 21:01:26,824 >> `torch_dtype` is deprecated! Use `dtype` instead!
-[INFO|configuration_utils.py:839] 2025-10-23 21:01:26,824 >> Model config Qwen3Config {
-  "architectures": [
-    "Qwen3ForCausalLM"
-  ],
-  "attention_bias": false,
-  "attention_dropout": 0.0,
-  "bos_token_id": 151643,
-  "dtype": "bfloat16",
-  "eos_token_id": 151645,
-  "head_dim": 128,
-  "hidden_act": "silu",
-  "hidden_size": 5120,
-  "initializer_range": 0.02,
-  "intermediate_size": 17408,
-  "layer_types": [
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention",
-    "full_attention"
-  ],
-  "max_position_embeddings": 40960,
-  "max_window_layers": 40,
-  "model_type": "qwen3",
-  "num_attention_heads": 40,
-  "num_hidden_layers": 40,
-  "num_key_value_heads": 8,
-  "rms_norm_eps": 1e-06,
-  "rope_scaling": null,
-  "rope_theta": 1000000,
-  "sliding_window": null,
-  "tie_word_embeddings": false,
-  "transformers_version": "4.57.1",
-  "use_cache": true,
-  "use_sliding_window": false,
-  "vocab_size": 151936
-}
-
-[INFO|modeling_utils.py:1169] 2025-10-23 21:01:26,831 >> loading weights file /home/Competition2025/P05/shareP05/models/Qwen3-14B/model.safetensors.index.json
-[INFO|modeling_utils.py:2341] 2025-10-23 21:01:26,832 >> Instantiating Qwen3ForCausalLM model under default dtype torch.bfloat16.
-[INFO|configuration_utils.py:986] 2025-10-23 21:01:26,833 >> Generate config GenerationConfig {
-  "bos_token_id": 151643,
-  "eos_token_id": 151645
-}
-
-Loading checkpoint shards:   0%|          | 0/8 [00:00<?, ?it/s]Loading checkpoint shards:  88%|████████▊ | 7/8 [00:00<00:00, 61.49it/s]Loading checkpoint shards: 100%|██████████| 8/8 [00:00<00:00, 68.65it/s]
-[INFO|configuration_utils.py:939] 2025-10-23 21:01:26,998 >> loading configuration file /home/Competition2025/P05/shareP05/models/Qwen3-14B/generation_config.json
-[INFO|configuration_utils.py:986] 2025-10-23 21:01:26,998 >> Generate config GenerationConfig {
-  "bos_token_id": 151643,
-  "do_sample": true,
-  "eos_token_id": [
-    151645,
-    151643
-  ],
-  "pad_token_id": 151643,
-  "temperature": 0.6,
-  "top_k": 20,
-  "top_p": 0.95
-}
-
-[INFO|dynamic_module_utils.py:423] 2025-10-23 21:01:26,999 >> Could not locate the custom_generate/generate.py inside /home/Competition2025/P05/shareP05/models/Qwen3-14B.
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,010 >> loading file vocab.json
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,010 >> loading file merges.txt
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,010 >> loading file tokenizer.json
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,011 >> loading file added_tokens.json
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,011 >> loading file special_tokens_map.json
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,011 >> loading file tokenizer_config.json
-[INFO|tokenization_utils_base.py:2093] 2025-10-23 21:01:27,011 >> loading file chat_template.jinja
-[INFO|tokenization_utils_base.py:2364] 2025-10-23 21:01:27,309 >> Special tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.
-/home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/trainer/trainer_hf.py:62: FutureWarning: `tokenizer` is deprecated and will be removed in version 5.0.0 for `HuggingfaceTrainer.__init__`. Use `processing_class` instead.
-  super().__init__(model=model,
-[INFO|trainer.py:749] 2025-10-23 21:01:48,479 >> Using auto half precision backend
-[WARNING|trainer.py:982] 2025-10-23 21:01:48,481 >> The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'bos_token_id': None, 'pad_token_id': 151643}.
-[INFO|trainer.py:2519] 2025-10-23 21:01:48,603 >> ***** Running training *****
-[INFO|trainer.py:2520] 2025-10-23 21:01:48,603 >>   Num examples = 1,761
-[INFO|trainer.py:2521] 2025-10-23 21:01:48,603 >>   Num Epochs = 2
-[INFO|trainer.py:2522] 2025-10-23 21:01:48,603 >>   Instantaneous batch size per device = 2
-[INFO|trainer.py:2524] 2025-10-23 21:01:48,603 >>   Training with DataParallel so batch size has been adjusted to: 16
-[INFO|trainer.py:2525] 2025-10-23 21:01:48,603 >>   Total train batch size (w. parallel, distributed & accumulation) = 128
-[INFO|trainer.py:2526] 2025-10-23 21:01:48,603 >>   Gradient Accumulation steps = 8
-[INFO|trainer.py:2527] 2025-10-23 21:01:48,603 >>   Total optimization steps = 28
-[INFO|trainer.py:2528] 2025-10-23 21:01:48,604 >>   Number of trainable parameters = 26,214,528
-  0%|          | 0/28 [00:00<?, ?it/s]
-  0%|          | 0/28 [00:00<?, ?it/s][Ahuggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
-To disable this warning, you can either:
-	- Avoid using `tokenizers` before the fork if possible
-	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
-huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
-To disable this warning, you can either:
-	- Avoid using `tokenizers` before the fork if possible
-	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
-huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
-To disable this warning, you can either:
-	- Avoid using `tokenizers` before the fork if possible
-	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
-huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
-To disable this warning, you can either:
-	- Avoid using `tokenizers` before the fork if possible
-	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
-[INFO|trainer_utils.py:861] 2025-10-23 21:01:48,680 >> The following columns in the Training set don't have a corresponding argument in `Qwen3ForCausalLM.forward` and have been ignored: index. If index are not expected by `Qwen3ForCausalLM.forward`,  you can safely ignore this message.
-[INFO|trainer_utils.py:861] 2025-10-23 21:01:48,682 >> The following columns in the Training set don't have a corresponding argument in `Qwen3ForCausalLM.forward` and have been ignored: index. If index are not expected by `Qwen3ForCausalLM.forward`,  you can safely ignore this message.
-[INFO|trainer_utils.py:861] 2025-10-23 21:01:48,683 >> The following columns in the Training set don't have a corresponding argument in `Qwen3ForCausalLM.forward` and have been ignored: index. If index are not expected by `Qwen3ForCausalLM.forward`,  you can safely ignore this message.
-[INFO|trainer_utils.py:861] 2025-10-23 21:01:48,685 >> The following columns in the Training set don't have a corresponding argument in `Qwen3ForCausalLM.forward` and have been ignored: index. If index are not expected by `Qwen3ForCausalLM.forward`,  you can safely ignore this message.
-Traceback (most recent call last):
-  File "/home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/run_spt_medical.py", line 59, in <module>
-    main()
-  File "/home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/run_spt_medical.py", line 52, in main
-    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
-  File "/home/Competition2025/P08/P08U023/model_analyze/medical_path_patching/Phase5_pinpoint_tuning/trainer/trainer_hf.py", line 159, in train
-    super().train(resume_from_checkpoint=resume_from_checkpoint,
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/trainer.py", line 2325, in train
-    return inner_training_loop(
-           ^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/trainer.py", line 2674, in _inner_training_loop
-    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/trainer.py", line 4020, in training_step
-    loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/trainer.py", line 4110, in compute_loss
-    outputs = model(**inputs)
-              ^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/parallel/data_parallel.py", line 194, in forward
-    outputs = self.parallel_apply(replicas, inputs, module_kwargs)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/parallel/data_parallel.py", line 213, in parallel_apply
-    return parallel_apply(
-           ^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/parallel/parallel_apply.py", line 129, in parallel_apply
-    output.reraise()
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/_utils.py", line 769, in reraise
-    raise exception
-torch.OutOfMemoryError: Caught OutOfMemoryError in replica 0 on device 0.
-Original Traceback (most recent call last):
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/parallel/parallel_apply.py", line 99, in _worker
-    output = module(*input, **kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 918, in wrapper
-    output = func(self, *args, **kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 480, in forward
-    outputs: BaseModelOutputWithPast = self.model(
-                                       ^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 1064, in wrapper
-    outputs = func(self, *args, **kwargs)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 410, in forward
-    hidden_states = decoder_layer(
-                    ^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/modeling_layers.py", line 94, in __call__
-    return super().__call__(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 260, in forward
-    hidden_states, _ = self.self_attn(
-                       ^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 216, in forward
-    attn_output, attn_weights = attention_interface(
-                                ^^^^^^^^^^^^^^^^^^^^
-  File "/home/Competition2025/P08/P08U023/model_analyze/sycophancy-interpretability/venv/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 145, in eager_attention_forward
-    attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 36.00 MiB. GPU 0 has a total capacity of 79.44 GiB of which 47.93 GiB is free. Including non-PyTorch memory, this process has 31.50 GiB memory in use. Of the allocated memory 29.91 GiB is allocated by PyTorch, and 117.55 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
-
-  0%|          | 0/28 [00:05<?, ?it/s]
-  0%|          | 0/28 [00:05<?, ?it/s]

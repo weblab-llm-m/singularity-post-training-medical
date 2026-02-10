@@ -1,0 +1,4 @@
+{
+  "module_input_name": "model.layers.{i}.input_layernorm",
+  "module_output_name": "model.layers.{i}.self_attn.o_proj"
+}

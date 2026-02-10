@@ -1,0 +1,115 @@
+# ヘッド分類基準
+# Head Classification Parameters
+# 翻訳論文の手法を参考に調整
+
+# 分類基準
+classification_criteria:
+  # Medical Term Heads（医療用語ヘッド）
+  # 翻訳論文のSource Heads検出と同じロジック
+  medical_term:
+    threshold: 0.002  # 【修正】医療用語位置への平均注意が0.2%以上（全体平均0.1%の2倍）
+    description: "Focus attention on medical terminology tokens"
+
+    # 詳細設定
+    min_attention_score: 0.0015  # 【修正】最小注意スコア
+    coverage_threshold: 0.3  # 【修正】カバー率（医療用語の30%以上に注意）
+
+  # Guideline Indicator Heads（ガイドライン指示語ヘッド）
+  # 翻訳論文のIndicator Heads検出と同じロジック
+  guideline_indicator:
+    spike_threshold: 0.005  # 【修正】最大注意値が0.5%以上
+    spike_ratio: 2.0  # 【修正】スパイク比率（最大/平均）が2.0以上
+    description: "Spike attention on guideline indicator tokens (e.g., 'CQ', 'ガイドライン')"
+
+    # 詳細設定
+    min_peak_attention: 0.003  # 【修正】最小ピーク注意
+    allowed_multi_spikes: 2  # 許容されるスパイク数
+
+  # Reasoning Flow Heads（推論フローヘッド）
+  # 翻訳論文のPositional Heads検出と同じロジック
+  reasoning_flow:
+    uniformity_threshold: 0.002  # 【再修正】標準偏差が0.2%以下（より緩和）
+    attention_mean_threshold: 0.0005  # 【再修正】平均注意が0.05%以上（より緩和）
+    description: "Uniform attention on reasoning keywords and adjacent tokens"
+
+    # 【追加】相対的な基準
+    relative_std_threshold: 1.2  # std / mean < 1.2（均一性の相対指標）
+
+    # 詳細設定
+    adjacent_window: 3  # 隣接トークンの窓サイズ
+    min_reasoning_keywords: 1  # 最小推論キーワード数
+
+# ヘッド選択基準（Pinpoint Tuning用）
+selection:
+  # 各タイプの優先度
+  priority_weights:
+    medical_term: 1.0  # 最優先
+    guideline_indicator: 0.9  # 高優先度
+    reasoning_flow: 0.7  # 中優先度
+
+  # Impact閾値（Path Patchingの結果から）
+  impact_thresholds:
+    medical_term: 0.05  # 5%以上のimpactで選択
+    guideline_indicator: 0.08  # 8%以上のimpactで選択
+    reasoning_flow: 0.10  # 10%以上のimpactで選択
+
+  # 選択戦略
+  strategy:
+    medical_term: "all_above_threshold"  # 閾値以上を全て選択
+    guideline_indicator: "all_above_threshold"  # 閾値以上を全て選択
+    reasoning_flow: "top_50_percent"  # 上位50%のみ選択
+
+  # 最大ヘッド数
+  max_heads_per_type:
+    medical_term: 30  # 医療用語ヘッド最大30個
+    guideline_indicator: 20  # ガイドラインヘッド最大20個
+    reasoning_flow: 14  # 推論ヘッド最大14個
+
+  max_total_heads: 64  # 全体で最大64個（全ヘッドの4%）
+
+# 統計分析設定
+statistical_analysis:
+  # レイヤーごとの分布分析
+  layer_distribution:
+    enable: true
+    plot: true
+
+  # Impact相関分析
+  impact_correlation:
+    enable: true
+    method: "spearman"  # spearman | pearson
+
+  # 有意性検定
+  significance_test:
+    enable: true
+    alpha: 0.05  # 有意水準
+    method: "t_test"  # t_test | wilcoxon
+
+# 可視化設定
+visualization:
+  # ヒートマップ設定
+  heatmap:
+    color_map: "RdBu"
+    show_values: false
+    interpolation: "nearest"
+
+  # 分類マーカー
+  markers:
+    medical_term:
+      symbol: "circle"
+      color: "red"
+      size: 10
+    guideline_indicator:
+      symbol: "square"
+      color: "blue"
+      size: 10
+    reasoning_flow:
+      symbol: "triangle"
+      color: "green"
+      size: 10
+
+# デバッグ設定
+debug:
+  save_intermediate_results: true
+  verbose_logging: false
+  sample_size_for_testing: 10  # テスト時のサンプル数
