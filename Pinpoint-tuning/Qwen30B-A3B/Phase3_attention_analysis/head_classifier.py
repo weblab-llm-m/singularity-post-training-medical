@@ -69,7 +69,7 @@ class HeadClassifier:
 
         results = {
             'medical_term_heads': [],
-            'guideline_indicator_heads': [],
+            'profile_indicator_heads': [],
             'reasoning_flow_heads': [],
             'unclassified': []
         }
@@ -116,8 +116,8 @@ class HeadClassifier:
         if self.is_medical_term_head(avg_attention_pattern):
             return 'medical_term_heads'
 
-        elif self.is_guideline_indicator_head(avg_attention_pattern):
-            return 'guideline_indicator_heads'
+        elif self.is_profile_indicator_head(avg_attention_pattern):
+            return 'profile_indicator_heads'
 
         elif self.is_reasoning_flow_head(avg_attention_pattern):
             return 'reasoning_flow_heads'
@@ -183,20 +183,20 @@ class HeadClassifier:
 
         return medical_attention_score > threshold
 
-    def is_guideline_indicator_head(self, attn_pattern: torch.Tensor) -> bool:
+    def is_profile_indicator_head(self, attn_pattern: torch.Tensor) -> bool:
         """
-        ガイドライン指示語ヘッドかどうかを判定
+        患者属性(プロフィール)ヘッドかどうかを判定
 
         Args:
             attn_pattern: 注意パターン [seq_len]
 
         Returns:
-            is_guideline: ガイドライン指示語ヘッドかどうか
+            is_profile: 患者属性ヘッドかどうか
         """
         all_guideline_positions = []
 
         for annotation in self.annotation_data:
-            positions = annotation.get('guideline_indicator_positions', [])
+            positions = annotation.get('profile_indicator_positions', [])
             all_guideline_positions.extend(positions)
 
         if not all_guideline_positions:
@@ -217,8 +217,8 @@ class HeadClassifier:
         mean_other_attn = attn_pattern[other_positions].mean().item()
         spike_ratio = max_attn_to_guideline / (mean_other_attn + 1e-10)
 
-        spike_threshold = self.criteria['guideline_indicator']['spike_threshold']
-        spike_ratio_threshold = self.criteria['guideline_indicator']['spike_ratio']
+        spike_threshold = self.criteria['profile_indicator']['spike_threshold']
+        spike_ratio_threshold = self.criteria['profile_indicator']['spike_ratio']
 
         return (max_attn_to_guideline > spike_threshold and
                 spike_ratio > spike_ratio_threshold)
@@ -286,8 +286,8 @@ class HeadClassifier:
         print(f"\nClassification results:")
         print(f"  Medical Term Heads: {len(results['medical_term_heads'])} " +
               f"({len(results['medical_term_heads'])/total_heads*100:.1f}%)")
-        print(f"  Guideline Indicator Heads: {len(results['guideline_indicator_heads'])} " +
-              f"({len(results['guideline_indicator_heads'])/total_heads*100:.1f}%)")
+        print(f"  Profile Indicator Heads: {len(results['profile_indicator_heads'])} " +
+              f"({len(results['profile_indicator_heads'])/total_heads*100:.1f}%)")
         print(f"  Reasoning Flow Heads: {len(results['reasoning_flow_heads'])} " +
               f"({len(results['reasoning_flow_heads'])/total_heads*100:.1f}%)")
         print(f"  Unclassified: {len(results['unclassified'])} " +

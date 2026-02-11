@@ -1,6 +1,6 @@
 #!/bin/bash
-# Phase 2: Path Patching - Multi-GPU Parallel Execution for MoE
-# 30B MoE model needs 4 GPUs per instance, so we run 2 parallel instances
+# Phase 2: Path Patching - 8-GPU Parallel Execution (1 GPU per process)
+# Qwen3-30B-A3B fits on a single H100 (~75GB VRAM)
 
 set -e
 
@@ -8,84 +8,83 @@ BASE_DIR="/home/yuuki.nakamura/singularity-post-training-medical/Pinpoint-tuning
 cd $BASE_DIR
 
 MODEL_PATH="/home/yuuki.nakamura/downloads/models/Qwen_Qwen3-30B-A3B-Instruct-2507"
-DATA_PATH="Phase1_data_preparation/path_patching_data.jsonl"
-OUTPUT_DIR="Phase2_path_patching/results_parallel"
-NUM_SAMPLES=${1:-6478}  # Default to all samples (6478)
+DATA_PATH="${2:-Phase1_data_preparation/path_patching_data.jsonl}"
+OUTPUT_DIR="${3:-Phase2_path_patching/results_parallel}"
+NUM_GPUS=8
+NUM_SAMPLES=${1:-6478}
 
 echo "==================================================="
-echo "Path Patching - Parallel Execution (MoE 30B)"
+echo "Path Patching - 8-GPU Parallel Execution"
 echo "==================================================="
 echo "Model: ${MODEL_PATH}"
 echo "Data: ${DATA_PATH}"
 echo "Total samples: ${NUM_SAMPLES}"
-echo "Strategy: 2 parallel processes (4 GPUs each)"
+echo "Strategy: ${NUM_GPUS} parallel processes (1 GPU each)"
 echo ""
 
 # Clean previous results
 rm -rf ${OUTPUT_DIR}/process_*/
+rm -rf ${OUTPUT_DIR}/data_chunks/
 mkdir -p ${OUTPUT_DIR}/data_chunks
-mkdir -p ${OUTPUT_DIR}/process_{0,1}
 
-# Split data into 2 chunks
-echo "Splitting data into 2 chunks..."
+for i in $(seq 0 $((NUM_GPUS - 1))); do
+    mkdir -p ${OUTPUT_DIR}/process_${i}
+done
+
+# Split data into N chunks
+echo "Splitting data into ${NUM_GPUS} chunks..."
 TOTAL_LINES=$(wc -l < ${DATA_PATH})
 SAMPLES_TO_USE=$((NUM_SAMPLES < TOTAL_LINES ? NUM_SAMPLES : TOTAL_LINES))
-CHUNK_SIZE=$((SAMPLES_TO_USE / 2))
+CHUNK_SIZE=$((SAMPLES_TO_USE / NUM_GPUS))
+REMAINDER=$((SAMPLES_TO_USE % NUM_GPUS))
 
-head -${SAMPLES_TO_USE} ${DATA_PATH} | head -${CHUNK_SIZE} > ${OUTPUT_DIR}/data_chunks/chunk_0.jsonl
-head -${SAMPLES_TO_USE} ${DATA_PATH} | tail -$((SAMPLES_TO_USE - CHUNK_SIZE)) > ${OUTPUT_DIR}/data_chunks/chunk_1.jsonl
-
-echo "Chunk 0: $(wc -l < ${OUTPUT_DIR}/data_chunks/chunk_0.jsonl) samples"
-echo "Chunk 1: $(wc -l < ${OUTPUT_DIR}/data_chunks/chunk_1.jsonl) samples"
+OFFSET=0
+for i in $(seq 0 $((NUM_GPUS - 1))); do
+    # Last chunk gets the remainder
+    if [ $i -lt $REMAINDER ]; then
+        THIS_CHUNK=$((CHUNK_SIZE + 1))
+    else
+        THIS_CHUNK=${CHUNK_SIZE}
+    fi
+    tail -n +$((OFFSET + 1)) ${DATA_PATH} | head -${THIS_CHUNK} > ${OUTPUT_DIR}/data_chunks/chunk_${i}.jsonl
+    ACTUAL=$(wc -l < ${OUTPUT_DIR}/data_chunks/chunk_${i}.jsonl)
+    echo "  Chunk ${i}: ${ACTUAL} samples (offset ${OFFSET})"
+    OFFSET=$((OFFSET + THIS_CHUNK))
+done
 echo ""
 
 # Activate venv
 source ${BASE_DIR}/venv/bin/activate
 
-# Launch 2 parallel processes
-# Process 0: GPUs 0,1,2,3
-echo "Starting Process 0 (GPUs 0-3)..."
-CUDA_VISIBLE_DEVICES=0,1,2,3 nohup python Phase2_path_patching/path_patching_medical.py \
-    --model_path ${MODEL_PATH} \
-    --data_path ${OUTPUT_DIR}/data_chunks/chunk_0.jsonl \
-    --output_dir ${OUTPUT_DIR}/process_0 \
-    --batch_size 1 \
-    --sample_num -1 \
-    > ${OUTPUT_DIR}/process_0.log 2>&1 &
+# Launch 8 parallel processes (1 GPU each)
+for i in $(seq 0 $((NUM_GPUS - 1))); do
+    echo "Starting Process ${i} (GPU ${i})..."
+    CUDA_VISIBLE_DEVICES=${i} nohup python Phase2_path_patching/path_patching_medical.py \
+        --model_path ${MODEL_PATH} \
+        --data_path ${OUTPUT_DIR}/data_chunks/chunk_${i}.jsonl \
+        --output_dir ${OUTPUT_DIR}/process_${i} \
+        --batch_size 1 \
+        --sample_num -1 \
+        > ${OUTPUT_DIR}/process_${i}.log 2>&1 &
 
-PID_0=$!
-echo $PID_0 > ${OUTPUT_DIR}/process_0.pid
-echo "Process 0 started (PID: $PID_0)"
-sleep 5
+    PID=$!
+    echo $PID > ${OUTPUT_DIR}/process_${i}.pid
+    echo "  PID: $PID"
 
-# Process 1: GPUs 4,5,6,7
-echo "Starting Process 1 (GPUs 4-7)..."
-CUDA_VISIBLE_DEVICES=4,5,6,7 nohup python Phase2_path_patching/path_patching_medical.py \
-    --model_path ${MODEL_PATH} \
-    --data_path ${OUTPUT_DIR}/data_chunks/chunk_1.jsonl \
-    --output_dir ${OUTPUT_DIR}/process_1 \
-    --batch_size 1 \
-    --sample_num -1 \
-    > ${OUTPUT_DIR}/process_1.log 2>&1 &
-
-PID_1=$!
-echo $PID_1 > ${OUTPUT_DIR}/process_1.pid
-echo "Process 1 started (PID: $PID_1)"
+    # Stagger launches to avoid simultaneous model loading
+    sleep 10
+done
 
 echo ""
 echo "==================================================="
-echo "Both processes launched!"
+echo "All ${NUM_GPUS} processes launched!"
 echo "==================================================="
-echo "Process 0 (GPUs 0-3): PID $PID_0"
-echo "Process 1 (GPUs 4-7): PID $PID_1"
+for i in $(seq 0 $((NUM_GPUS - 1))); do
+    PID=$(cat ${OUTPUT_DIR}/process_${i}.pid)
+    CHUNK_SIZE=$(wc -l < ${OUTPUT_DIR}/data_chunks/chunk_${i}.jsonl)
+    echo "  Process ${i} (GPU ${i}): PID ${PID}, ${CHUNK_SIZE} samples"
+done
 echo ""
-echo "Monitor logs:"
-echo "  tail -f ${OUTPUT_DIR}/process_0.log"
-echo "  tail -f ${OUTPUT_DIR}/process_1.log"
-echo ""
-echo "Check GPU usage:"
-echo "  watch -n 1 nvidia-smi"
-echo ""
-echo "Wait for completion:"
-echo "  ${BASE_DIR}/Phase2_path_patching/wait_parallel.sh"
-echo ""
+echo "Monitor: bash Phase2_path_patching/monitor_parallel.sh"
+echo "GPU:     watch -n 5 nvidia-smi"
+echo "==================================================="
