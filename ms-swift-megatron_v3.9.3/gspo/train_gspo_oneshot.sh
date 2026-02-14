@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=chord_learn
+#SBATCH --job-name=gspo_learn
 #SBATCH --partition=P08317
-#SBATCH --nodes=8
-#SBATCH --nodelist=osk-gpu[61-68]
+#SBATCH --nodes=12
+#SBATCH --nodelist=osk-gpu[52-60,62-64]
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=240
@@ -32,7 +32,7 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 # GRPO 用 JSONL データ（過去IgakuQA）
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
-SFT_DATASET_JSONL=${SFT_DATASET_JSONL:-$HOME/downloads/datasets/sft_igakuqa.jsonl}
+
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -49,11 +49,8 @@ NPROC_PER_NODE=${NPROC_PER_NODE:-8}
 NUM_GENERATIONS=${NUM_GENERATIONS:-16}
 SP_SIZE=${SP_SIZE:-1}
 
-# Dynamo無効化（再コンパイル警告を抑制）
-export TORCHDYNAMO_DISABLE=1
-
 # 共通環境変数
-export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"expandable_segments:True,max_split_size_mb:32,garbage_collection_threshold:0.6"}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"expandable_segments:True,max_split_size_mb:32"}
 export TRANSFORMERS_NO_TORCHVISION=1
 export TOKENIZERS_PARALLELISM=false
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
@@ -80,6 +77,7 @@ export MASTER_PORT=${MASTER_PORT:-29500}
 export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | awk "/default/ {print \$5}")}
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
+
 
 # ===== 軽いプリウォーム（flash-attn ビルド） =====
 srun --overlap -N1 -n1 -w "${MASTER_NODE}" singularity exec --nv --cleanenv \
@@ -111,9 +109,6 @@ except Exception as e:
 PY
   '
 
-export LOGLEVEL=DEBUG
-
-
 # ===== ③ 学習本体 (Megatron GRPO, vLLM colocate + DAPO 設定) =====
 srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per-node=1 --kill-on-bad-exit=1 \
   singularity exec --nv --cleanenv \
@@ -124,7 +119,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     -B "${MODEL_PATH}:${MODEL_PATH}" \
     -B "/dev/shm:/dev/shm" \
     -B "${DATASET_JSONL}:${DATASET_JSONL}" \
-    -B "${SFT_DATASET_JSONL}:${SFT_DATASET_JSONL}" \
     --home "${HF_CACHE}:/root" \
     --env NODE_RANK="${SLURM_NODEID}" \
     --env NNODES="${SLURM_JOB_NUM_NODES}" \
@@ -146,7 +140,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_API_KEY="${WANDB_API_KEY}" \
     --env WANDB_ENTITY='llm-m_wandb-weblab' \
     --env WANDB_PROJECT="${PROJECT_NAME}" \
-    --env WANDB_DIR=${OUTPUT_DIR} \
+    --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
     "${SIF_FILE}" bash -lc "
@@ -174,22 +168,19 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --chord_sft_dataset ${SFT_DATASET_JSONL} \
-          --chord_sft_per_device_train_batch_size 2 \
-          --chord_mu_peak 0.1 \
-          --chord_mu_valley 0.01 \
-          --chord_mu_warmup_steps 0 \
-          --chord_mu_decay_steps 500 \
-          --chord_enable_phi_function false \
+          --importance_sampling_level sequence \
+          --epsilon 3e-4 \
+          --epsilon_high 4e-4 \
           --beta 0.1 \
+          --steps_per_generation 4 \
           --overlong_filter true \
           --reward_funcs ophtho chinese \
-          --reward_weights 1.5 1.0 \
+          --reward_weights 1.5 0.3 \
           --soft_cache_length 1024 \
-          --max_epochs 5 \
+          --max_epochs 1 \
           --eval_interval 50 \
           --save_interval 50 \
-          --sleep_level 2 \
+          --sleep_level 1 \
           --clip_grad 0.4 \
           --lr 1e-6 \
           --lr_decay_style cosine \
@@ -204,11 +195,12 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --torch_dtype ${DTYPE} \
           --context_parallel_size 1 \
           --tensor_model_parallel_size 1 \
-          --expert_model_parallel_size 8 \
-          --pipeline_model_parallel_size 8 \
+          --expert_model_parallel_size 4 \
+          --pipeline_model_parallel_size 24 \
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
+          --save_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -221,29 +213,29 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
           --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
           --global_batch_size 512 \
           --micro_batch_size 1 \
-          --steps_per_generation 5 \
+          --steps_per_generation 3 \
           --num_generations ${NUM_GENERATIONS} \
           --max_length ${MAX_MODEL_LEN} \
           --max_completion_length ${MAX_COMPLETION_LEN} \
           --use_vllm true \
           --vllm_mode colocate \
-          --vllm_gpu_memory_utilization 0.3 \
+          --vllm_gpu_memory_utilization 0.4 \
           --vllm_tensor_parallel_size 8 \
           --vllm_max_model_len ${MAX_MODEL_LEN} \
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
-          --padding_free false \
+          --padding_free true \
           --save '${OUTPUT_DIR}' \
+          --no_save_optim \
+          --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
-          --wandb_exp_name 'chord_grpo_reward_chinese_1.0_5epochs'
+          --wandb_exp_name 'gspo_reward_chinese_0.3'
     "
-
-# --log_completions trueでWandbで推論結果を出力させる
