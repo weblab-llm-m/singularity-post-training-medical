@@ -32,7 +32,7 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 # GRPO 用 JSONL データ（過去IgakuQA）
 # messages + answer を含む *.jsonl を想定(swift-RLリポジトリのswift-RL/src/swift/data/prepare_data_v2.py実行し作成
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
-
+SFT_DATASET_JSONL=${SFT_DATASET_JSONL:-$HOME/downloads/datasets/sft_igakuqa.jsonl}
 
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
@@ -124,6 +124,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     -B "${MODEL_PATH}:${MODEL_PATH}" \
     -B "/dev/shm:/dev/shm" \
     -B "${DATASET_JSONL}:${DATASET_JSONL}" \
+    -B "${SFT_DATASET_JSONL}:${SFT_DATASET_JSONL}" \
     --home "${HF_CACHE}:/root" \
     --env NODE_RANK="${SLURM_NODEID}" \
     --env NNODES="${SLURM_JOB_NUM_NODES}" \
@@ -173,7 +174,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
             ${MS_SWIFT_DIR}/examples/train/grpo/plugin/reward_chinese_plugin.py \
           --rlhf_type grpo \
           --loss_type grpo \
-          --chord_sft_dataset llm-wizard/alpaca-gpt4-data-zh \
+          --chord_sft_dataset ${SFT_DATASET_JSONL} \
           --chord_sft_per_device_train_batch_size 2 \
           --chord_mu_peak 0.1 \
           --chord_mu_valley 0.01 \
