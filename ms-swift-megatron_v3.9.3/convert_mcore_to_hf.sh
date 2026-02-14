@@ -2,6 +2,7 @@
 #SBATCH --job-name=convert_mcore_to_hf
 #SBATCH --partition=P08317
 #SBATCH --nodes=1
+#SBATCH --nodelist=osk-gpu47
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=64
@@ -129,6 +130,7 @@ singularity exec --nv --cleanenv \
       --tensor_model_parallel_size 1 \
       --expert_model_parallel_size 8 \
       --pipeline_model_parallel_size 1 \
+      --use_cpu_initialization true \
       --test_convert_precision ${TEST_PRECISION}
   "
 
