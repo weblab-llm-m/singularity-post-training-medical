@@ -849,12 +849,12 @@ def parse_pinpoint_layers(layers_str: Optional[str]) -> Optional[List[int]]:
 
 
 def parse_pinpoint_experts(experts_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
-    """Parse experts string: "5:3,7|10:1,4" -> {5: [3, 7], 10: [1, 4]}"""
+    """Parse experts string: "5:3,7_10:1,4" -> {5: [3, 7], 10: [1, 4]}"""
     if not experts_str:
         return None
     
     result = {}
-    for item in experts_str.split('|'):
+    for item in experts_str.split('_'):
         if ':' not in item:
             continue
         layer_str, indices_str = item.split(':')
@@ -866,12 +866,12 @@ def parse_pinpoint_experts(experts_str: Optional[str]) -> Optional[Dict[int, Lis
 
 
 def parse_pinpoint_heads(heads_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
-    """Parse heads string: "5:0,1,2|10:3,4" -> {5: [0, 1, 2], 10: [3, 4]}"""
+    """Parse heads string: "5:0,1,2_10:3,4" -> {5: [0, 1, 2], 10: [3, 4]}"""
     if not heads_str:
         return None
     
     result = {}
-    for item in heads_str.split('|'):
+    for item in heads_str.split('_'):
         if ':' not in item:
             continue
         layer_str, indices_str = item.split(':')
