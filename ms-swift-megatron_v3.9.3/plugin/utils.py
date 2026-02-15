@@ -197,6 +197,11 @@ def prepare_mcore_model(model):
             head_dim = None
             if num_attention_heads and hidden_size:
                 head_dim = hidden_size // num_attention_heads
+            logger.info(f"[PinPointTuning] Model config from args:")
+            logger.info(f"  num_attention_heads: {num_attention_heads}")
+            logger.info(f"  num_query_groups (kv_heads): {num_key_value_heads}")
+            logger.info(f"  hidden_size: {hidden_size}")
+            logger.info(f"  head_dim: {head_dim}")
             
             # Apply PinPointTuning
             pinpoint_freeze_parameters(

@@ -739,6 +739,20 @@ def register_head_gradient_hooks(
     
     Supports Megatron-LM parameter naming convention where Q/K/V are fused into linear_qkv.
     """
+    # ============ デバッグ: 引数の値を確認 ============
+    logger.info(f"[Head Hook] Received parameters:")
+    logger.info(f"  num_attention_heads: {num_attention_heads}")
+    logger.info(f"  num_key_value_heads: {num_key_value_heads}")
+    logger.info(f"  head_dim: {head_dim}")
+    
+    if num_attention_heads and head_dim:
+        q_size = num_attention_heads * head_dim
+        kv_heads = num_key_value_heads or num_attention_heads
+        kv_size = kv_heads * head_dim
+        expected_qkv_dim = q_size + 2 * kv_size
+        logger.info(f"  Expected QKV dim: {expected_qkv_dim} (Q={q_size} + K={kv_size} + V={kv_size})")
+    # ============ デバッグここまで ============
+
     
     # Megatron-LM形式のパターン
     layer_pattern = re.compile(r'decoder\.layers\.(\d+)\.')
