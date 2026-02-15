@@ -1,6 +1,7 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import gc
 import hashlib
+import logging
 import os
 import pickle
 import re
@@ -726,6 +727,25 @@ def pinpoint_freeze_parameters(
     
     logger.info(f'{"="*60}\n')
     
+    if logger.isEnabledFor(logging.DEBUG):
+        layer_stats = {}
+        for name, param in model.named_parameters():
+            layer_idx = get_layer_idx(name)
+            if layer_idx is not None:
+                if layer_idx not in layer_stats:
+                    layer_stats[layer_idx] = {'trainable': 0, 'frozen': 0}
+                if param.requires_grad:
+                    layer_stats[layer_idx]['trainable'] += param.numel()
+                else:
+                    layer_stats[layer_idx]['frozen'] += param.numel()
+        
+        logger.debug('[PinPointTuning] Per-layer parameter stats:')
+        for layer_idx in sorted(layer_stats.keys()):
+            stats = layer_stats[layer_idx]
+            total = stats['trainable'] + stats['frozen']
+            pct = 100 * stats['trainable'] / total if total > 0 else 0
+            logger.debug(f'  Layer {layer_idx}: {stats["trainable"]:,} trainable / {total:,} total ({pct:.2f}%)')
+
     # Register gradient hooks for attention head-level control if specified
     if trainable_heads is not None and num_attention_heads is not None and head_dim is not None:
         register_head_gradient_hooks(
