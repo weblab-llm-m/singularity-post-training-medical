@@ -554,207 +554,175 @@ def pinpoint_freeze_parameters(
     num_key_value_heads: Optional[int] = None,
     head_dim: Optional[int] = None,
 ) -> nn.Module:
-    """
-    PinPointTuning: Selectively freeze/unfreeze parameters at layer, expert, and attention head granularity.
+    """PinPointTuning: Selective freeze at layer/expert/head granularity for Megatron-LM models."""
     
-    This function implements the PinPointTuning methodology from arxiv:2409.01658, which identifies
-    and trains only specific modules that significantly affect model behavior.
+    # ============================================================
+    # Megatron-LM用のパターン定義
+    # ============================================================
+    # HuggingFace: model.layers.X.self_attn.q_proj
+    # Megatron-LM: decoder.layers.X.self_attention.linear_qkv
     
-    Args:
-        model: The PyTorch model to configure
-        trainable_layers: List of layer indices to keep trainable. If None, all layers are considered.
-        trainable_experts: Dict mapping layer_idx to list of expert indices to keep trainable.
-                          Example: {5: [3, 7], 10: [1, 4]} means layer 5 experts 3,7 and layer 10 experts 1,4.
-        trainable_heads: Dict mapping layer_idx to list of attention head indices to keep trainable.
-                        Example: {5: [0, 1, 2], 10: [3, 4]} for specific heads per layer.
-        freeze_mlp: Whether to freeze MLP/FFN layers (default: True for PinPointTuning)
-        freeze_attention: Whether to freeze attention layers (default: False)
-        freeze_router: Whether to freeze MoE router/gate (default: True)
-        freeze_shared_expert: Whether to freeze shared experts in MoE (default: True)
-        freeze_embed_lm_head: Whether to freeze embedding and lm_head (default: True)
-        num_attention_heads: Number of attention heads (required for head-level control)
-        num_key_value_heads: Number of key-value heads for GQA (required for head-level control)
-        head_dim: Dimension per head (required for head-level control)
+    layer_pattern = re.compile(r'decoder\.layers\.(\d+)\.')
+    attn_pattern = re.compile(r'\.self_attention\.')
+    mlp_pattern = re.compile(r'\.mlp\.')
+    router_pattern = re.compile(r'\.mlp\.router\.')
+    # Megatron-LM: experts.linear_fc1.weight0, weight1, ... / experts.linear_fc2.weight0, ...
+    experts_pattern = re.compile(r'\.mlp\.experts\.linear_fc[12]\.weight(\d+)')
+    shared_expert_pattern = re.compile(r'\.mlp\.shared_expert')
+    # Embedding and output layers
+    embed_pattern = re.compile(r'^embedding\.|^output_layer\.|\.final_layernorm\.')
     
-    Returns:
-        The model with requires_grad configured according to PinPointTuning settings.
-    """
-    
-    # Pattern definitions for different model architectures
-    # These patterns work for Qwen3 MoE and similar architectures
-    layer_pattern = r'model\.layers\.(\d+)\.'
-    attn_pattern = r'\.self_attn\.'
-    mlp_pattern = r'\.mlp\.'
-    router_pattern = r'\.mlp\.gate\.'
-    experts_pattern = r'\.mlp\.experts\.(\d+)\.'
-    shared_expert_pattern = r'\.mlp\.shared_expert\.'
-    embed_pattern = r'model\.embed_tokens'
-    lm_head_pattern = r'lm_head'
-    norm_pattern = r'model\.norm'
-    
-    def get_layer_idx(param_name: str) -> Optional[int]:
-        """Extract layer index from parameter name."""
-        match = re.search(layer_pattern, param_name)
+    # ============================================================
+    # ヘルパー関数
+    # ============================================================
+    def get_layer_idx(name: str) -> Optional[int]:
+        """パラメータ名からレイヤーインデックスを抽出"""
+        match = layer_pattern.search(name)
         return int(match.group(1)) if match else None
     
-    def get_expert_idx(param_name: str) -> Optional[int]:
-        """Extract expert index from parameter name."""
-        match = re.search(experts_pattern, param_name)
+    def get_expert_idx(name: str) -> Optional[int]:
+        """パラメータ名からエキスパートインデックスを抽出"""
+        match = experts_pattern.search(name)
         return int(match.group(1)) if match else None
     
-    def is_attention_param(param_name: str) -> bool:
-        """Check if parameter belongs to attention module."""
-        return bool(re.search(attn_pattern, param_name))
+    def is_attention_param(name: str) -> bool:
+        """Attentionパラメータかどうか"""
+        return bool(attn_pattern.search(name))
     
-    def is_mlp_param(param_name: str) -> bool:
-        """Check if parameter belongs to MLP module."""
-        return bool(re.search(mlp_pattern, param_name))
+    def is_mlp_param(name: str) -> bool:
+        """MLPパラメータかどうか（router, experts, shared_expertを含む）"""
+        return bool(mlp_pattern.search(name))
     
-    def is_router_param(param_name: str) -> bool:
-        """Check if parameter is MoE router/gate."""
-        return bool(re.search(router_pattern, param_name))
+    def is_router_param(name: str) -> bool:
+        """Routerパラメータかどうか"""
+        return bool(router_pattern.search(name))
     
-    def is_expert_param(param_name: str) -> bool:
-        """Check if parameter belongs to an expert."""
-        return bool(re.search(experts_pattern, param_name))
+    def is_expert_param(name: str) -> bool:
+        """Expertパラメータかどうか"""
+        return bool(experts_pattern.search(name))
     
-    def is_shared_expert_param(param_name: str) -> bool:
-        """Check if parameter belongs to shared expert."""
-        return bool(re.search(shared_expert_pattern, param_name))
+    def is_shared_expert_param(name: str) -> bool:
+        """Shared Expertパラメータかどうか"""
+        return bool(shared_expert_pattern.search(name))
     
-    def is_embed_or_lm_head(param_name: str) -> bool:
-        """Check if parameter is embedding or lm_head."""
-        return bool(re.search(embed_pattern, param_name) or 
-                   re.search(lm_head_pattern, param_name) or
-                   re.search(norm_pattern, param_name))
+    def is_embed_lm_head_param(name: str) -> bool:
+        """Embedding/LM_Headパラメータかどうか"""
+        return bool(embed_pattern.search(name))
     
-    # First, freeze all parameters
+    # ============================================================
+    # まず全パラメータをフリーズ
+    # ============================================================
     for param in model.parameters():
         param.requires_grad = False
     
-    trainable_count = 0
-    frozen_count = 0
-    trainable_param_names = []
+    # ============================================================
+    # 選択的にアンフリーズ
+    # ============================================================
+    trainable_params = []
     
     for name, param in model.named_parameters():
-        should_train = False
         layer_idx = get_layer_idx(name)
         
-        # Handle embedding, lm_head, and final norm
-        if is_embed_or_lm_head(name):
-            should_train = not freeze_embed_lm_head
+        # レイヤー制限のチェック
+        if trainable_layers is not None:
+            if layer_idx is None or layer_idx not in trainable_layers:
+                # このレイヤーは学習対象外
+                continue
         
-        # Handle layer-level parameters
-        elif layer_idx is not None:
-            # Check if this layer is in trainable_layers
-            layer_allowed = (trainable_layers is None) or (layer_idx in trainable_layers)
-            
-            if not layer_allowed:
-                should_train = False
-            
-            # Attention parameters
-            elif is_attention_param(name):
-                should_train = not freeze_attention
-                # Note: Head-level control requires gradient hooks (handled separately)
-            
-            # Router/Gate parameters (MoE)
-            elif is_router_param(name):
-                should_train = not freeze_router
-            
-            # Shared expert parameters (MoE)
-            elif is_shared_expert_param(name):
-                should_train = not freeze_shared_expert
-            
-            # Expert parameters (MoE)
-            elif is_expert_param(name):
-                expert_idx = get_expert_idx(name)
-                if trainable_experts is not None and layer_idx in trainable_experts:
-                    # Only train specified experts
-                    should_train = expert_idx in trainable_experts[layer_idx]
-                else:
-                    # Default MLP freeze behavior
-                    should_train = not freeze_mlp
-            
-            # Regular MLP parameters (non-MoE)
-            elif is_mlp_param(name):
-                should_train = not freeze_mlp
-            
-            # Layer norm and other layer-specific parameters
-            else:
-                # Keep layer norms trainable if the layer is trainable
-                should_train = layer_allowed and (not freeze_mlp or not freeze_attention)
+        # Embedding/LM_Head
+        if is_embed_lm_head_param(name):
+            if not freeze_embed_lm_head:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
         
-        param.requires_grad = should_train
+        # Attention パラメータ
+        if is_attention_param(name):
+            if not freeze_attention:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
         
-        if should_train:
-            trainable_count += param.numel()
-            trainable_param_names.append(name)
-        else:
-            frozen_count += param.numel()
+        # Router パラメータ
+        if is_router_param(name):
+            if not freeze_router:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
+        
+        # Shared Expert パラメータ
+        if is_shared_expert_param(name):
+            if not freeze_shared_expert:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
+        
+        # Expert パラメータ
+        if is_expert_param(name):
+            expert_idx = get_expert_idx(name)
+            
+            # trainable_experts が指定されている場合
+            if trainable_experts is not None:
+                if layer_idx in trainable_experts:
+                    if expert_idx in trainable_experts[layer_idx]:
+                        param.requires_grad = True
+                        trainable_params.append(name)
+            # trainable_experts が未指定の場合は freeze_mlp に従う
+            elif not freeze_mlp:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
+        
+        # その他のMLPパラメータ（pre_mlp_layernormなど）
+        if is_mlp_param(name):
+            if not freeze_mlp:
+                param.requires_grad = True
+                trainable_params.append(name)
+            continue
     
-    # Log summary
-    total = trainable_count + frozen_count
-    logger.info(f'\n{"="*60}')
-    logger.info(f'PinPointTuning Configuration Summary')
-    logger.info(f'{"="*60}')
-    logger.info(f'Total parameters: {total:,}')
-    logger.info(f'Trainable: {trainable_count:,} ({100*trainable_count/total:.4f}%)')
-    logger.info(f'Frozen: {frozen_count:,} ({100*frozen_count/total:.4f}%)')
-    logger.info(f'{"="*60}')
+    # ============================================================
+    # 統計情報の計算とログ出力
+    # ============================================================
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    frozen_count = total_params - trainable_count
+    
+    logger.info("=" * 60)
+    logger.info("PinPointTuning Configuration Summary")
+    logger.info("=" * 60)
+    logger.info(f"Total parameters: {total_params:,}")
+    logger.info(f"Trainable: {trainable_count:,} ({100 * trainable_count / total_params:.4f}%)")
+    logger.info(f"Frozen: {frozen_count:,} ({100 * frozen_count / total_params:.4f}%)")
+    logger.info("=" * 60)
+    logger.info(f"Freeze MLP: {freeze_mlp}")
+    logger.info(f"Freeze Attention: {freeze_attention}")
+    logger.info(f"Freeze Router: {freeze_router}")
+    logger.info(f"Freeze Shared Expert: {freeze_shared_expert}")
+    logger.info(f"Freeze Embed/LM_Head: {freeze_embed_lm_head}")
     
     if trainable_layers is not None:
-        logger.info(f'Trainable layers: {trainable_layers}')
+        logger.info(f"Trainable Layers: {trainable_layers}")
     if trainable_experts is not None:
-        logger.info(f'Trainable experts: {trainable_experts}')
+        logger.info(f"Trainable Experts: {trainable_experts}")
     if trainable_heads is not None:
-        logger.info(f'Trainable heads: {trainable_heads}')
+        logger.info(f"Trainable Heads: {trainable_heads}")
     
-    logger.info(f'Freeze MLP: {freeze_mlp}')
-    logger.info(f'Freeze Attention: {freeze_attention}')
-    logger.info(f'Freeze Router: {freeze_router}')
-    logger.info(f'Freeze Shared Expert: {freeze_shared_expert}')
-    logger.info(f'Freeze Embed/LM_Head: {freeze_embed_lm_head}')
+    logger.info("\nTrainable parameters:")
+    for name in trainable_params[:30]:  # 最初の30件のみ表示
+        logger.info(f"  {name}")
+    if len(trainable_params) > 30:
+        logger.info(f"  ... and {len(trainable_params) - 30} more")
+    logger.info("=" * 60)
     
-    if len(trainable_param_names) <= 20:
-        logger.info(f'\nTrainable parameters:')
-        for pname in trainable_param_names:
-            logger.info(f'  - {pname}')
-    else:
-        logger.info(f'\nTrainable parameters (first 10):')
-        for pname in trainable_param_names[:10]:
-            logger.info(f'  - {pname}')
-        logger.info(f'  ... and {len(trainable_param_names) - 10} more')
-    
-    logger.info(f'{"="*60}\n')
-    
-    if logger.isEnabledFor(logging.DEBUG):
-        layer_stats = {}
-        for name, param in model.named_parameters():
-            layer_idx = get_layer_idx(name)
-            if layer_idx is not None:
-                if layer_idx not in layer_stats:
-                    layer_stats[layer_idx] = {'trainable': 0, 'frozen': 0}
-                if param.requires_grad:
-                    layer_stats[layer_idx]['trainable'] += param.numel()
-                else:
-                    layer_stats[layer_idx]['frozen'] += param.numel()
-        
-        logger.debug('[PinPointTuning] Per-layer parameter stats:')
-        for layer_idx in sorted(layer_stats.keys()):
-            stats = layer_stats[layer_idx]
-            total = stats['trainable'] + stats['frozen']
-            pct = 100 * stats['trainable'] / total if total > 0 else 0
-            logger.debug(f'  Layer {layer_idx}: {stats["trainable"]:,} trainable / {total:,} total ({pct:.2f}%)')
-
-    # Register gradient hooks for attention head-level control if specified
-    if trainable_heads is not None and num_attention_heads is not None and head_dim is not None:
+    # ============================================================
+    # Attention Head制御用のGradient Hooks（必要な場合）
+    # ============================================================
+    if trainable_heads is not None and num_attention_heads is not None:
         register_head_gradient_hooks(
-            model, 
-            trainable_heads, 
-            num_attention_heads,
-            num_key_value_heads or num_attention_heads,
-            head_dim
+            model, trainable_heads, num_attention_heads,
+            num_key_value_heads, head_dim
         )
+        logger.info(f"Registered gradient hooks for attention head control: {trainable_heads}")
     
     return model
 
