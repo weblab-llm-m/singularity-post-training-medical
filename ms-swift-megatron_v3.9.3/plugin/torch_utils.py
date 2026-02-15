@@ -752,49 +752,69 @@ def register_head_gradient_hooks(
         num_key_value_heads = num_attention_heads
     
     def create_qkv_head_mask_hook(layer_idx: int, num_q_heads: int, num_kv_heads: int, h_dim: int):
-        """
-        Create gradient mask hook for fused QKV projection (Megatron-LM style).
-        
-        linear_qkv weight shape: [q_size + k_size + v_size, hidden_size]
-        where q_size = num_q_heads * h_dim, k_size = v_size = num_kv_heads * h_dim
-        """
+        """Create gradient mask hook for fused QKV projection with debug logging."""
         q_heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
         
-        # Map Q heads to KV heads (for GQA)
         heads_per_kv = num_q_heads // num_kv_heads
         kv_heads = list(set(h // heads_per_kv for h in q_heads))
         
         q_size = num_q_heads * h_dim
         kv_size = num_kv_heads * h_dim
         
+        # デバッグ: 初回のみ詳細ログを出力するためのカウンター
+        call_count = [0]
+        
         def hook(grad):
             if grad is None:
                 return None
             
             grad_shape = grad.shape
-            total_qkv_dim = q_size + 2 * kv_size  # Q + K + V
+            total_qkv_dim = q_size + 2 * kv_size
             
-            # Determine orientation
             if grad_shape[0] == total_qkv_dim:
-                # Shape: [Q+K+V, hidden_size]
-                # Create mask for Q
+                # Create masks
                 q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in q_heads:
                     q_mask[h] = 1.0
                 q_mask = q_mask.repeat_interleave(h_dim)
                 
-                # Create mask for K and V
                 kv_mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
                 for h in kv_heads:
                     kv_mask[h] = 1.0
                 kv_mask = kv_mask.repeat_interleave(h_dim)
                 
-                # Concatenate: [Q_mask, K_mask, V_mask]
                 full_mask = torch.cat([q_mask, kv_mask, kv_mask]).unsqueeze(1)
-                return grad * full_mask
+                masked_grad = grad * full_mask
+                
+                # ============ デバッグログ（初回のみ詳細出力） ============
+                if call_count[0] < 3:
+                    # 勾配の非ゼロ要素数を確認
+                    nonzero_before = (grad.abs() > 1e-10).sum().item()
+                    nonzero_after = (masked_grad.abs() > 1e-10).sum().item()
+                    
+                    # 各ヘッドの勾配状況を確認
+                    logger.info(f"[Head Hook Debug] Layer {layer_idx} QKV (call #{call_count[0] + 1})")
+                    logger.info(f"  Grad shape: {grad_shape}")
+                    logger.info(f"  Trainable Q heads: {q_heads} (rows 0-{len(q_heads) * h_dim - 1})")
+                    logger.info(f"  Trainable KV heads: {kv_heads}")
+                    logger.info(f"  Nonzero grad elements: {nonzero_before:,} -> {nonzero_after:,}")
+                    logger.info(f"  Reduction ratio: {100 * (1 - nonzero_after / max(nonzero_before, 1)):.1f}%")
+                    
+                    # ヘッドごとの勾配ノルムを表示
+                    for head_idx in range(min(num_q_heads, 8)):  # 最初の8ヘッドのみ
+                        start_row = head_idx * h_dim
+                        end_row = (head_idx + 1) * h_dim
+                        head_grad_norm = masked_grad[start_row:end_row].norm().item()
+                        status = "ACTIVE" if head_idx in q_heads else "MASKED"
+                        logger.info(f"    Q Head {head_idx}: grad_norm={head_grad_norm:.6f} [{status}]")
+                    
+                    call_count[0] += 1
+                # ============ デバッグここまで ============
+                
+                return masked_grad
             
             elif grad_shape[1] == total_qkv_dim:
-                # Shape: [hidden_size, Q+K+V]
+                # 同様の処理（省略）
                 q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in q_heads:
                     q_mask[h] = 1.0
@@ -809,7 +829,7 @@ def register_head_gradient_hooks(
                 return grad * full_mask
             
             else:
-                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape} for QKV, expected dim {total_qkv_dim}')
+                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape}')
                 return grad
         
         return hook
