@@ -849,28 +849,34 @@ def parse_pinpoint_layers(layers_str: Optional[str]) -> Optional[List[int]]:
 
 
 def parse_pinpoint_experts(experts_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
-    """
-    Parse JSON string of layer-to-expert mapping.
-    
-    Example input: '{"5": [3, 7], "10": [1, 4]}'
-    Returns: {5: [3, 7], 10: [1, 4]}
-    """
-    if experts_str is None or experts_str.strip() == '':
+    """Parse experts string: "5:3,7;10:1,4" -> {5: [3, 7], 10: [1, 4]}"""
+    if not experts_str:
         return None
-    import json
-    parsed = json.loads(experts_str)
-    return {int(k): v for k, v in parsed.items()}
+    
+    result = {}
+    for item in experts_str.split(';'):
+        if ':' not in item:
+            continue
+        layer_str, indices_str = item.split(':')
+        layer_idx = int(layer_str.strip())
+        indices = [int(x.strip()) for x in indices_str.split(',')]
+        result[layer_idx] = indices
+    
+    return result
 
 
 def parse_pinpoint_heads(heads_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
-    """
-    Parse JSON string of layer-to-heads mapping.
-    
-    Example input: '{"5": [0, 1, 2], "10": [3, 4, 5]}'
-    Returns: {5: [0, 1, 2], 10: [3, 4, 5]}
-    """
-    if heads_str is None or heads_str.strip() == '':
+    """Parse heads string: "5:0,1,2;10:3,4" -> {5: [0, 1, 2], 10: [3, 4]}"""
+    if not heads_str:
         return None
-    import json
-    parsed = json.loads(heads_str)
-    return {int(k): v for k, v in parsed.items()}
+    
+    result = {}
+    for item in heads_str.split(';'):
+        if ':' not in item:
+            continue
+        layer_str, indices_str = item.split(':')
+        layer_idx = int(layer_str.strip())
+        indices = [int(x.strip()) for x in indices_str.split(',')]
+        result[layer_idx] = indices
+    
+    return result
