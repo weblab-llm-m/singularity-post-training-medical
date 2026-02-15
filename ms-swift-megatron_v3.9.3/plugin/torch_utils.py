@@ -731,114 +731,157 @@ def register_head_gradient_hooks(
     model: nn.Module,
     trainable_heads: Dict[int, List[int]],
     num_attention_heads: int,
-    num_key_value_heads: int,
+    num_key_value_heads: Optional[int],
     head_dim: int,
 ) -> None:
     """
     Register gradient hooks to mask gradients for non-trainable attention heads.
     
-    This enables fine-grained control at the attention head level, which is not possible
-    through standard requires_grad settings since all heads share the same weight matrices.
-    
-    Args:
-        model: The PyTorch model
-        trainable_heads: Dict mapping layer_idx to list of trainable head indices
-        num_attention_heads: Total number of attention heads
-        num_key_value_heads: Number of key-value heads (for GQA)
-        head_dim: Dimension per attention head
-    
-    Note:
-        This function registers backward hooks that mask gradients during backpropagation.
-        Only specified heads will receive gradient updates.
+    Supports Megatron-LM parameter naming convention where Q/K/V are fused into linear_qkv.
     """
     
-    layer_pattern = r'model\.layers\.(\d+)\.'
+    # Megatron-LM形式のパターン
+    layer_pattern = re.compile(r'decoder\.layers\.(\d+)\.')
     
     def get_layer_idx(param_name: str) -> Optional[int]:
-        match = re.search(layer_pattern, param_name)
+        match = layer_pattern.search(param_name)
         return int(match.group(1)) if match else None
     
-    def create_q_head_mask_hook(layer_idx: int, num_heads: int, h_dim: int):
-        """Create gradient mask hook for Q projection (uses all heads)."""
-        heads = trainable_heads.get(layer_idx, list(range(num_heads)))
-        
-        def hook(grad):
-            if grad is None:
-                return None
-            # grad shape: [num_heads * head_dim, hidden_size] or [hidden_size, num_heads * head_dim]
-            # Determine orientation and create mask
-            grad_shape = grad.shape
-            total_head_dim = num_heads * h_dim
-            
-            if grad_shape[0] == total_head_dim:
-                # Shape: [num_heads * head_dim, hidden_size]
-                mask = torch.zeros(num_heads, device=grad.device, dtype=grad.dtype)
-                mask[heads] = 1.0
-                mask = mask.repeat_interleave(h_dim).unsqueeze(1)
-                return grad * mask
-            elif grad_shape[1] == total_head_dim:
-                # Shape: [hidden_size, num_heads * head_dim]
-                mask = torch.zeros(num_heads, device=grad.device, dtype=grad.dtype)
-                mask[heads] = 1.0
-                mask = mask.repeat_interleave(h_dim).unsqueeze(0)
-                return grad * mask
-            else:
-                # Unexpected shape, return unchanged
-                logger.warning(f'Unexpected gradient shape {grad_shape} for Q projection')
-                return grad
-        
-        return hook
+    # KV heads のデフォルト値
+    if num_key_value_heads is None:
+        num_key_value_heads = num_attention_heads
     
-    def create_kv_head_mask_hook(layer_idx: int, num_kv_heads: int, h_dim: int, num_q_heads: int):
-        """Create gradient mask hook for K/V projection (uses KV heads, mapped from Q heads)."""
+    def create_qkv_head_mask_hook(layer_idx: int, num_q_heads: int, num_kv_heads: int, h_dim: int):
+        """
+        Create gradient mask hook for fused QKV projection (Megatron-LM style).
+        
+        linear_qkv weight shape: [q_size + k_size + v_size, hidden_size]
+        where q_size = num_q_heads * h_dim, k_size = v_size = num_kv_heads * h_dim
+        """
         q_heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
-        # Map Q heads to KV heads (for GQA: multiple Q heads share one KV head)
+        
+        # Map Q heads to KV heads (for GQA)
         heads_per_kv = num_q_heads // num_kv_heads
         kv_heads = list(set(h // heads_per_kv for h in q_heads))
         
+        q_size = num_q_heads * h_dim
+        kv_size = num_kv_heads * h_dim
+        
         def hook(grad):
             if grad is None:
                 return None
-            grad_shape = grad.shape
-            total_head_dim = num_kv_heads * h_dim
             
-            if grad_shape[0] == total_head_dim:
-                mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
-                mask[kv_heads] = 1.0
-                mask = mask.repeat_interleave(h_dim).unsqueeze(1)
-                return grad * mask
-            elif grad_shape[1] == total_head_dim:
-                mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
-                mask[kv_heads] = 1.0
-                mask = mask.repeat_interleave(h_dim).unsqueeze(0)
-                return grad * mask
+            grad_shape = grad.shape
+            total_qkv_dim = q_size + 2 * kv_size  # Q + K + V
+            
+            # Determine orientation
+            if grad_shape[0] == total_qkv_dim:
+                # Shape: [Q+K+V, hidden_size]
+                # Create mask for Q
+                q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
+                for h in q_heads:
+                    q_mask[h] = 1.0
+                q_mask = q_mask.repeat_interleave(h_dim)
+                
+                # Create mask for K and V
+                kv_mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
+                for h in kv_heads:
+                    kv_mask[h] = 1.0
+                kv_mask = kv_mask.repeat_interleave(h_dim)
+                
+                # Concatenate: [Q_mask, K_mask, V_mask]
+                full_mask = torch.cat([q_mask, kv_mask, kv_mask]).unsqueeze(1)
+                return grad * full_mask
+            
+            elif grad_shape[1] == total_qkv_dim:
+                # Shape: [hidden_size, Q+K+V]
+                q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
+                for h in q_heads:
+                    q_mask[h] = 1.0
+                q_mask = q_mask.repeat_interleave(h_dim)
+                
+                kv_mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
+                for h in kv_heads:
+                    kv_mask[h] = 1.0
+                kv_mask = kv_mask.repeat_interleave(h_dim)
+                
+                full_mask = torch.cat([q_mask, kv_mask, kv_mask]).unsqueeze(0)
+                return grad * full_mask
+            
             else:
+                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape} for QKV, expected dim {total_qkv_dim}')
                 return grad
         
         return hook
     
-    # Register hooks for attention projections
+    def create_proj_head_mask_hook(layer_idx: int, num_q_heads: int, h_dim: int):
+        """
+        Create gradient mask hook for output projection (linear_proj).
+        
+        linear_proj weight shape: [hidden_size, num_heads * head_dim]
+        """
+        heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
+        
+        def hook(grad):
+            if grad is None:
+                return None
+            
+            grad_shape = grad.shape
+            total_head_dim = num_q_heads * h_dim
+            
+            if grad_shape[0] == total_head_dim:
+                # Shape: [num_heads * head_dim, hidden_size]
+                mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
+                for h in heads:
+                    mask[h] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(1)
+                return grad * mask
+            
+            elif grad_shape[1] == total_head_dim:
+                # Shape: [hidden_size, num_heads * head_dim]
+                mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
+                for h in heads:
+                    mask[h] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(0)
+                return grad * mask
+            
+            else:
+                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape} for proj')
+                return grad
+        
+        return hook
+    
+    # Register hooks for Megatron-LM attention projections
     hooks_registered = 0
+    
     for name, param in model.named_parameters():
         layer_idx = get_layer_idx(name)
         if layer_idx is None or layer_idx not in trainable_heads:
             continue
         
-        if '.self_attn.q_proj.' in name and param.requires_grad:
-            param.register_hook(create_q_head_mask_hook(layer_idx, num_attention_heads, head_dim))
+        if not param.requires_grad:
+            continue
+        
+        # Megatron-LM: linear_qkv (fused Q/K/V)
+        if '.self_attention.linear_qkv.weight' in name:
+            param.register_hook(
+                create_qkv_head_mask_hook(layer_idx, num_attention_heads, num_key_value_heads, head_dim)
+            )
             hooks_registered += 1
-        elif '.self_attn.k_proj.' in name and param.requires_grad:
-            param.register_hook(create_kv_head_mask_hook(layer_idx, num_key_value_heads, head_dim, num_attention_heads))
+            logger.debug(f'[Head Hook] Registered QKV hook for {name}')
+        
+        # Megatron-LM: linear_proj (output projection)
+        elif '.self_attention.linear_proj.weight' in name:
+            param.register_hook(
+                create_proj_head_mask_hook(layer_idx, num_attention_heads, head_dim)
+            )
             hooks_registered += 1
-        elif '.self_attn.v_proj.' in name and param.requires_grad:
-            param.register_hook(create_kv_head_mask_hook(layer_idx, num_key_value_heads, head_dim, num_attention_heads))
-            hooks_registered += 1
-        elif '.self_attn.o_proj.' in name and param.requires_grad:
-            param.register_hook(create_q_head_mask_hook(layer_idx, num_attention_heads, head_dim))
-            hooks_registered += 1
+            logger.debug(f'[Head Hook] Registered proj hook for {name}')
     
-    if hooks_registered > 0:
-        logger.info(f'[PinPointTuning] Registered {hooks_registered} gradient hooks for attention head control')
+    logger.info(f'[PinPointTuning] Registered {hooks_registered} gradient hooks for attention head control')
+    
+    if hooks_registered == 0:
+        logger.warning('[PinPointTuning] No gradient hooks registered. Check parameter names and trainable_heads configuration.')
 
 
 def parse_pinpoint_layers(layers_str: Optional[str]) -> Optional[List[int]]:
