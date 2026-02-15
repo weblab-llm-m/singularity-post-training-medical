@@ -730,51 +730,86 @@ def pinpoint_freeze_parameters(
 def register_head_gradient_hooks(
     model: nn.Module,
     trainable_heads: Dict[int, List[int]],
-    num_attention_heads: int,
+    num_attention_heads: Optional[int],
     num_key_value_heads: Optional[int],
-    head_dim: int,
+    head_dim: Optional[int],
 ) -> None:
-    """
-    Register gradient hooks to mask gradients for non-trainable attention heads.
+    """Register gradient hooks for attention head control."""
     
-    Supports Megatron-LM parameter naming convention where Q/K/V are fused into linear_qkv.
-    """
-    # ============ デバッグ: 引数の値を確認 ============
-    logger.info(f"[Head Hook] Received parameters:")
-    logger.info(f"  num_attention_heads: {num_attention_heads}")
-    logger.info(f"  num_key_value_heads: {num_key_value_heads}")
-    logger.info(f"  head_dim: {head_dim}")
-    
-    if num_attention_heads and head_dim:
-        q_size = num_attention_heads * head_dim
-        kv_heads = num_key_value_heads or num_attention_heads
-        kv_size = kv_heads * head_dim
-        expected_qkv_dim = q_size + 2 * kv_size
-        logger.info(f"  Expected QKV dim: {expected_qkv_dim} (Q={q_size} + K={kv_size} + V={kv_size})")
-    # ============ デバッグここまで ============
-
-    
-    # Megatron-LM形式のパターン
     layer_pattern = re.compile(r'decoder\.layers\.(\d+)\.')
     
     def get_layer_idx(param_name: str) -> Optional[int]:
         match = layer_pattern.search(param_name)
         return int(match.group(1)) if match else None
     
-    # KV heads のデフォルト値
-    if num_key_value_heads is None:
-        num_key_value_heads = num_attention_heads
+    # ============================================================
+    # モデルの重み形状から正しい値を推測
+    # ============================================================
+    qkv_dim = None
+    proj_dim = None
+    
+    for name, param in model.named_parameters():
+        if '.self_attention.linear_qkv.weight' in name:
+            qkv_dim = param.shape[0]  # out_features
+            hidden_size = param.shape[1]  # in_features
+        elif '.self_attention.linear_proj.weight' in name:
+            proj_dim = param.shape[1]  # in_features (出力projection)
+        
+        if qkv_dim is not None and proj_dim is not None:
+            break
+    
+    if qkv_dim is None or proj_dim is None:
+        logger.warning("[Head Hook] Could not determine model dimensions from weights")
+        return
+    
+    # Q size = proj_dim (output projectionの入力次元)
+    # K + V size = qkv_dim - proj_dim
+    q_size = proj_dim
+    kv_size = (qkv_dim - q_size) // 2  # K and V are same size
+    
+    # head_dimを推測（一般的な値: 64, 128, 256）
+    # num_attention_headsとhead_dimの組み合わせを探す
+    possible_head_dims = [256, 128, 64]
+    inferred_num_heads = None
+    inferred_head_dim = None
+    inferred_num_kv_heads = None
+    
+    for hd in possible_head_dims:
+        if q_size % hd == 0 and kv_size % hd == 0:
+            inferred_head_dim = hd
+            inferred_num_heads = q_size // hd
+            inferred_num_kv_heads = kv_size // hd
+            break
+    
+    if inferred_head_dim is None:
+        logger.warning(f"[Head Hook] Could not infer head dimensions from Q={q_size}, KV={kv_size}")
+        return
+    
+    logger.info(f"[Head Hook] Inferred model dimensions from weights:")
+    logger.info(f"  QKV dim: {qkv_dim}, Proj dim: {proj_dim}")
+    logger.info(f"  Q size: {q_size}, K size: {kv_size}, V size: {kv_size}")
+    logger.info(f"  num_attention_heads: {inferred_num_heads}")
+    logger.info(f"  num_key_value_heads: {inferred_num_kv_heads}")
+    logger.info(f"  head_dim: {inferred_head_dim}")
+    
+    # 推測した値を使用
+    num_attention_heads = inferred_num_heads
+    num_key_value_heads = inferred_num_kv_heads
+    head_dim = inferred_head_dim
+    
+    # ============================================================
+    # 以下、既存のフック登録ロジック（修正版の値を使用）
+    # ============================================================
     
     def create_qkv_head_mask_hook(layer_idx: int, num_q_heads: int, num_kv_heads: int, h_dim: int):
-        """Create gradient mask hook for fused QKV projection with debug logging."""
         q_heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
         
         heads_per_kv = num_q_heads // num_kv_heads
         kv_heads = list(set(h // heads_per_kv for h in q_heads))
         
-        q_size = num_q_heads * h_dim
-        kv_size = num_kv_heads * h_dim
-        
+        q_size_local = num_q_heads * h_dim
+        kv_size_local = num_kv_heads * h_dim
+
         # デバッグ: 初回のみ詳細ログを出力するためのカウンター
         call_count = [0]
         
@@ -783,18 +818,19 @@ def register_head_gradient_hooks(
                 return None
             
             grad_shape = grad.shape
-            total_qkv_dim = q_size + 2 * kv_size
+            total_qkv_dim = q_size_local + 2 * kv_size_local
             
             if grad_shape[0] == total_qkv_dim:
-                # Create masks
                 q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in q_heads:
-                    q_mask[h] = 1.0
+                    if h < num_q_heads:
+                        q_mask[h] = 1.0
                 q_mask = q_mask.repeat_interleave(h_dim)
                 
                 kv_mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
                 for h in kv_heads:
-                    kv_mask[h] = 1.0
+                    if h < num_kv_heads:
+                        kv_mask[h] = 1.0
                 kv_mask = kv_mask.repeat_interleave(h_dim)
                 
                 full_mask = torch.cat([q_mask, kv_mask, kv_mask]).unsqueeze(1)
@@ -828,32 +864,28 @@ def register_head_gradient_hooks(
                 return masked_grad
             
             elif grad_shape[1] == total_qkv_dim:
-                # 同様の処理（省略）
                 q_mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in q_heads:
-                    q_mask[h] = 1.0
+                    if h < num_q_heads:
+                        q_mask[h] = 1.0
                 q_mask = q_mask.repeat_interleave(h_dim)
                 
                 kv_mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
                 for h in kv_heads:
-                    kv_mask[h] = 1.0
+                    if h < num_kv_heads:
+                        kv_mask[h] = 1.0
                 kv_mask = kv_mask.repeat_interleave(h_dim)
                 
                 full_mask = torch.cat([q_mask, kv_mask, kv_mask]).unsqueeze(0)
                 return grad * full_mask
             
             else:
-                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape}')
+                logger.warning(f'[Head Hook] Unexpected gradient shape {grad_shape}, expected dim {total_qkv_dim}')
                 return grad
         
         return hook
     
     def create_proj_head_mask_hook(layer_idx: int, num_q_heads: int, h_dim: int):
-        """
-        Create gradient mask hook for output projection (linear_proj).
-        
-        linear_proj weight shape: [hidden_size, num_heads * head_dim]
-        """
         heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
         
         def hook(grad):
@@ -864,18 +896,18 @@ def register_head_gradient_hooks(
             total_head_dim = num_q_heads * h_dim
             
             if grad_shape[0] == total_head_dim:
-                # Shape: [num_heads * head_dim, hidden_size]
                 mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in heads:
-                    mask[h] = 1.0
+                    if h < num_q_heads:
+                        mask[h] = 1.0
                 mask = mask.repeat_interleave(h_dim).unsqueeze(1)
                 return grad * mask
             
             elif grad_shape[1] == total_head_dim:
-                # Shape: [hidden_size, num_heads * head_dim]
                 mask = torch.zeros(num_q_heads, device=grad.device, dtype=grad.dtype)
                 for h in heads:
-                    mask[h] = 1.0
+                    if h < num_q_heads:
+                        mask[h] = 1.0
                 mask = mask.repeat_interleave(h_dim).unsqueeze(0)
                 return grad * mask
             
@@ -885,7 +917,7 @@ def register_head_gradient_hooks(
         
         return hook
     
-    # Register hooks for Megatron-LM attention projections
+    # Register hooks
     hooks_registered = 0
     
     for name, param in model.named_parameters():
@@ -896,26 +928,22 @@ def register_head_gradient_hooks(
         if not param.requires_grad:
             continue
         
-        # Megatron-LM: linear_qkv (fused Q/K/V)
         if '.self_attention.linear_qkv.weight' in name:
             param.register_hook(
                 create_qkv_head_mask_hook(layer_idx, num_attention_heads, num_key_value_heads, head_dim)
             )
             hooks_registered += 1
-            logger.debug(f'[Head Hook] Registered QKV hook for {name}')
         
-        # Megatron-LM: linear_proj (output projection)
         elif '.self_attention.linear_proj.weight' in name:
             param.register_hook(
                 create_proj_head_mask_hook(layer_idx, num_attention_heads, head_dim)
             )
             hooks_registered += 1
-            logger.debug(f'[Head Hook] Registered proj hook for {name}')
     
     logger.info(f'[PinPointTuning] Registered {hooks_registered} gradient hooks for attention head control')
     
     if hooks_registered == 0:
-        logger.warning('[PinPointTuning] No gradient hooks registered. Check parameter names and trainable_heads configuration.')
+        logger.warning('[PinPointTuning] No gradient hooks registered.')
 
 
 def parse_pinpoint_layers(layers_str: Optional[str]) -> Optional[List[int]]:
