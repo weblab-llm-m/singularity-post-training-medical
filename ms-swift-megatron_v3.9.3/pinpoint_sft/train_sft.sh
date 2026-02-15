@@ -9,10 +9,9 @@
 #SBATCH --time=40:00:00
 #SBATCH --mem=1200G
 #SBATCH --exclusive
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
 set -xeuo pipefail
-mkdir -p logs
 source $HOME/singularity-post-training-medical/.env
 
 # ============================================================
@@ -36,7 +35,7 @@ DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/sft_igakuqa.jsonl}
 #  学習パラメータ
 # ============================================================
 DTYPE=${DTYPE:-bfloat16}
-MAX_LENGTH=${MAX_LENGTH:-16384}
+MAX_LENGTH=${MAX_LENGTH:-4096}
 
 PROJECT_NAME=${PROJECT_NAME:-megatron_swift_qwen_next80b}
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-sft_igakuqa}
@@ -176,7 +175,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --lora_alpha 32 \
           --target_modules all-linear \
           --load_safetensors true \
-          --lazy_tokenize true \
           --finetune true \
           --tensor_model_parallel_size 1 \
           --pipeline_model_parallel_size 4 \
@@ -189,7 +187,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_aux_loss_coeff 1e-3 \
           --micro_batch_size 2 \
           --global_batch_size 32 \
-          --packing true \
+          --padding_free true \
           --recompute_granularity full \
           --recompute_method uniform \
           --recompute_num_layers 1 \
