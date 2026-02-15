@@ -534,3 +534,355 @@ def unwrap_model_for_generation(
                 add_hooks(model)
     else:
         yield unwrapped_model
+
+# ============================================================
+# PinPointTuning Implementation
+# ============================================================
+
+def pinpoint_freeze_parameters(
+    model: nn.Module,
+    trainable_layers: Optional[List[int]] = None,
+    trainable_experts: Optional[Dict[int, List[int]]] = None,
+    trainable_heads: Optional[Dict[int, List[int]]] = None,
+    freeze_mlp: bool = True,
+    freeze_attention: bool = False,
+    freeze_router: bool = True,
+    freeze_shared_expert: bool = True,
+    freeze_embed_lm_head: bool = True,
+    num_attention_heads: Optional[int] = None,
+    num_key_value_heads: Optional[int] = None,
+    head_dim: Optional[int] = None,
+) -> nn.Module:
+    """
+    PinPointTuning: Selectively freeze/unfreeze parameters at layer, expert, and attention head granularity.
+    
+    This function implements the PinPointTuning methodology from arxiv:2409.01658, which identifies
+    and trains only specific modules that significantly affect model behavior.
+    
+    Args:
+        model: The PyTorch model to configure
+        trainable_layers: List of layer indices to keep trainable. If None, all layers are considered.
+        trainable_experts: Dict mapping layer_idx to list of expert indices to keep trainable.
+                          Example: {5: [3, 7], 10: [1, 4]} means layer 5 experts 3,7 and layer 10 experts 1,4.
+        trainable_heads: Dict mapping layer_idx to list of attention head indices to keep trainable.
+                        Example: {5: [0, 1, 2], 10: [3, 4]} for specific heads per layer.
+        freeze_mlp: Whether to freeze MLP/FFN layers (default: True for PinPointTuning)
+        freeze_attention: Whether to freeze attention layers (default: False)
+        freeze_router: Whether to freeze MoE router/gate (default: True)
+        freeze_shared_expert: Whether to freeze shared experts in MoE (default: True)
+        freeze_embed_lm_head: Whether to freeze embedding and lm_head (default: True)
+        num_attention_heads: Number of attention heads (required for head-level control)
+        num_key_value_heads: Number of key-value heads for GQA (required for head-level control)
+        head_dim: Dimension per head (required for head-level control)
+    
+    Returns:
+        The model with requires_grad configured according to PinPointTuning settings.
+    """
+    
+    # Pattern definitions for different model architectures
+    # These patterns work for Qwen3 MoE and similar architectures
+    layer_pattern = r'model\.layers\.(\d+)\.'
+    attn_pattern = r'\.self_attn\.'
+    mlp_pattern = r'\.mlp\.'
+    router_pattern = r'\.mlp\.gate\.'
+    experts_pattern = r'\.mlp\.experts\.(\d+)\.'
+    shared_expert_pattern = r'\.mlp\.shared_expert\.'
+    embed_pattern = r'model\.embed_tokens'
+    lm_head_pattern = r'lm_head'
+    norm_pattern = r'model\.norm'
+    
+    def get_layer_idx(param_name: str) -> Optional[int]:
+        """Extract layer index from parameter name."""
+        match = re.search(layer_pattern, param_name)
+        return int(match.group(1)) if match else None
+    
+    def get_expert_idx(param_name: str) -> Optional[int]:
+        """Extract expert index from parameter name."""
+        match = re.search(experts_pattern, param_name)
+        return int(match.group(1)) if match else None
+    
+    def is_attention_param(param_name: str) -> bool:
+        """Check if parameter belongs to attention module."""
+        return bool(re.search(attn_pattern, param_name))
+    
+    def is_mlp_param(param_name: str) -> bool:
+        """Check if parameter belongs to MLP module."""
+        return bool(re.search(mlp_pattern, param_name))
+    
+    def is_router_param(param_name: str) -> bool:
+        """Check if parameter is MoE router/gate."""
+        return bool(re.search(router_pattern, param_name))
+    
+    def is_expert_param(param_name: str) -> bool:
+        """Check if parameter belongs to an expert."""
+        return bool(re.search(experts_pattern, param_name))
+    
+    def is_shared_expert_param(param_name: str) -> bool:
+        """Check if parameter belongs to shared expert."""
+        return bool(re.search(shared_expert_pattern, param_name))
+    
+    def is_embed_or_lm_head(param_name: str) -> bool:
+        """Check if parameter is embedding or lm_head."""
+        return bool(re.search(embed_pattern, param_name) or 
+                   re.search(lm_head_pattern, param_name) or
+                   re.search(norm_pattern, param_name))
+    
+    # First, freeze all parameters
+    for param in model.parameters():
+        param.requires_grad = False
+    
+    trainable_count = 0
+    frozen_count = 0
+    trainable_param_names = []
+    
+    for name, param in model.named_parameters():
+        should_train = False
+        layer_idx = get_layer_idx(name)
+        
+        # Handle embedding, lm_head, and final norm
+        if is_embed_or_lm_head(name):
+            should_train = not freeze_embed_lm_head
+        
+        # Handle layer-level parameters
+        elif layer_idx is not None:
+            # Check if this layer is in trainable_layers
+            layer_allowed = (trainable_layers is None) or (layer_idx in trainable_layers)
+            
+            if not layer_allowed:
+                should_train = False
+            
+            # Attention parameters
+            elif is_attention_param(name):
+                should_train = not freeze_attention
+                # Note: Head-level control requires gradient hooks (handled separately)
+            
+            # Router/Gate parameters (MoE)
+            elif is_router_param(name):
+                should_train = not freeze_router
+            
+            # Shared expert parameters (MoE)
+            elif is_shared_expert_param(name):
+                should_train = not freeze_shared_expert
+            
+            # Expert parameters (MoE)
+            elif is_expert_param(name):
+                expert_idx = get_expert_idx(name)
+                if trainable_experts is not None and layer_idx in trainable_experts:
+                    # Only train specified experts
+                    should_train = expert_idx in trainable_experts[layer_idx]
+                else:
+                    # Default MLP freeze behavior
+                    should_train = not freeze_mlp
+            
+            # Regular MLP parameters (non-MoE)
+            elif is_mlp_param(name):
+                should_train = not freeze_mlp
+            
+            # Layer norm and other layer-specific parameters
+            else:
+                # Keep layer norms trainable if the layer is trainable
+                should_train = layer_allowed and (not freeze_mlp or not freeze_attention)
+        
+        param.requires_grad = should_train
+        
+        if should_train:
+            trainable_count += param.numel()
+            trainable_param_names.append(name)
+        else:
+            frozen_count += param.numel()
+    
+    # Log summary
+    total = trainable_count + frozen_count
+    logger.info(f'\n{"="*60}')
+    logger.info(f'PinPointTuning Configuration Summary')
+    logger.info(f'{"="*60}')
+    logger.info(f'Total parameters: {total:,}')
+    logger.info(f'Trainable: {trainable_count:,} ({100*trainable_count/total:.4f}%)')
+    logger.info(f'Frozen: {frozen_count:,} ({100*frozen_count/total:.4f}%)')
+    logger.info(f'{"="*60}')
+    
+    if trainable_layers is not None:
+        logger.info(f'Trainable layers: {trainable_layers}')
+    if trainable_experts is not None:
+        logger.info(f'Trainable experts: {trainable_experts}')
+    if trainable_heads is not None:
+        logger.info(f'Trainable heads: {trainable_heads}')
+    
+    logger.info(f'Freeze MLP: {freeze_mlp}')
+    logger.info(f'Freeze Attention: {freeze_attention}')
+    logger.info(f'Freeze Router: {freeze_router}')
+    logger.info(f'Freeze Shared Expert: {freeze_shared_expert}')
+    logger.info(f'Freeze Embed/LM_Head: {freeze_embed_lm_head}')
+    
+    if len(trainable_param_names) <= 20:
+        logger.info(f'\nTrainable parameters:')
+        for pname in trainable_param_names:
+            logger.info(f'  - {pname}')
+    else:
+        logger.info(f'\nTrainable parameters (first 10):')
+        for pname in trainable_param_names[:10]:
+            logger.info(f'  - {pname}')
+        logger.info(f'  ... and {len(trainable_param_names) - 10} more')
+    
+    logger.info(f'{"="*60}\n')
+    
+    # Register gradient hooks for attention head-level control if specified
+    if trainable_heads is not None and num_attention_heads is not None and head_dim is not None:
+        register_head_gradient_hooks(
+            model, 
+            trainable_heads, 
+            num_attention_heads,
+            num_key_value_heads or num_attention_heads,
+            head_dim
+        )
+    
+    return model
+
+
+def register_head_gradient_hooks(
+    model: nn.Module,
+    trainable_heads: Dict[int, List[int]],
+    num_attention_heads: int,
+    num_key_value_heads: int,
+    head_dim: int,
+) -> None:
+    """
+    Register gradient hooks to mask gradients for non-trainable attention heads.
+    
+    This enables fine-grained control at the attention head level, which is not possible
+    through standard requires_grad settings since all heads share the same weight matrices.
+    
+    Args:
+        model: The PyTorch model
+        trainable_heads: Dict mapping layer_idx to list of trainable head indices
+        num_attention_heads: Total number of attention heads
+        num_key_value_heads: Number of key-value heads (for GQA)
+        head_dim: Dimension per attention head
+    
+    Note:
+        This function registers backward hooks that mask gradients during backpropagation.
+        Only specified heads will receive gradient updates.
+    """
+    
+    layer_pattern = r'model\.layers\.(\d+)\.'
+    
+    def get_layer_idx(param_name: str) -> Optional[int]:
+        match = re.search(layer_pattern, param_name)
+        return int(match.group(1)) if match else None
+    
+    def create_q_head_mask_hook(layer_idx: int, num_heads: int, h_dim: int):
+        """Create gradient mask hook for Q projection (uses all heads)."""
+        heads = trainable_heads.get(layer_idx, list(range(num_heads)))
+        
+        def hook(grad):
+            if grad is None:
+                return None
+            # grad shape: [num_heads * head_dim, hidden_size] or [hidden_size, num_heads * head_dim]
+            # Determine orientation and create mask
+            grad_shape = grad.shape
+            total_head_dim = num_heads * h_dim
+            
+            if grad_shape[0] == total_head_dim:
+                # Shape: [num_heads * head_dim, hidden_size]
+                mask = torch.zeros(num_heads, device=grad.device, dtype=grad.dtype)
+                mask[heads] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(1)
+                return grad * mask
+            elif grad_shape[1] == total_head_dim:
+                # Shape: [hidden_size, num_heads * head_dim]
+                mask = torch.zeros(num_heads, device=grad.device, dtype=grad.dtype)
+                mask[heads] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(0)
+                return grad * mask
+            else:
+                # Unexpected shape, return unchanged
+                logger.warning(f'Unexpected gradient shape {grad_shape} for Q projection')
+                return grad
+        
+        return hook
+    
+    def create_kv_head_mask_hook(layer_idx: int, num_kv_heads: int, h_dim: int, num_q_heads: int):
+        """Create gradient mask hook for K/V projection (uses KV heads, mapped from Q heads)."""
+        q_heads = trainable_heads.get(layer_idx, list(range(num_q_heads)))
+        # Map Q heads to KV heads (for GQA: multiple Q heads share one KV head)
+        heads_per_kv = num_q_heads // num_kv_heads
+        kv_heads = list(set(h // heads_per_kv for h in q_heads))
+        
+        def hook(grad):
+            if grad is None:
+                return None
+            grad_shape = grad.shape
+            total_head_dim = num_kv_heads * h_dim
+            
+            if grad_shape[0] == total_head_dim:
+                mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
+                mask[kv_heads] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(1)
+                return grad * mask
+            elif grad_shape[1] == total_head_dim:
+                mask = torch.zeros(num_kv_heads, device=grad.device, dtype=grad.dtype)
+                mask[kv_heads] = 1.0
+                mask = mask.repeat_interleave(h_dim).unsqueeze(0)
+                return grad * mask
+            else:
+                return grad
+        
+        return hook
+    
+    # Register hooks for attention projections
+    hooks_registered = 0
+    for name, param in model.named_parameters():
+        layer_idx = get_layer_idx(name)
+        if layer_idx is None or layer_idx not in trainable_heads:
+            continue
+        
+        if '.self_attn.q_proj.' in name and param.requires_grad:
+            param.register_hook(create_q_head_mask_hook(layer_idx, num_attention_heads, head_dim))
+            hooks_registered += 1
+        elif '.self_attn.k_proj.' in name and param.requires_grad:
+            param.register_hook(create_kv_head_mask_hook(layer_idx, num_key_value_heads, head_dim, num_attention_heads))
+            hooks_registered += 1
+        elif '.self_attn.v_proj.' in name and param.requires_grad:
+            param.register_hook(create_kv_head_mask_hook(layer_idx, num_key_value_heads, head_dim, num_attention_heads))
+            hooks_registered += 1
+        elif '.self_attn.o_proj.' in name and param.requires_grad:
+            param.register_hook(create_q_head_mask_hook(layer_idx, num_attention_heads, head_dim))
+            hooks_registered += 1
+    
+    if hooks_registered > 0:
+        logger.info(f'[PinPointTuning] Registered {hooks_registered} gradient hooks for attention head control')
+
+
+def parse_pinpoint_layers(layers_str: Optional[str]) -> Optional[List[int]]:
+    """Parse comma-separated layer indices string to list of integers."""
+    if layers_str is None or layers_str.strip() == '':
+        return None
+    return [int(x.strip()) for x in layers_str.split(',')]
+
+
+def parse_pinpoint_experts(experts_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
+    """
+    Parse JSON string of layer-to-expert mapping.
+    
+    Example input: '{"5": [3, 7], "10": [1, 4]}'
+    Returns: {5: [3, 7], 10: [1, 4]}
+    """
+    if experts_str is None or experts_str.strip() == '':
+        return None
+    import json
+    parsed = json.loads(experts_str)
+    return {int(k): v for k, v in parsed.items()}
+
+
+def parse_pinpoint_heads(heads_str: Optional[str]) -> Optional[Dict[int, List[int]]]:
+    """
+    Parse JSON string of layer-to-heads mapping.
+    
+    Example input: '{"5": [0, 1, 2], "10": [3, 4, 5]}'
+    Returns: {5: [0, 1, 2], 10: [3, 4, 5]}
+    """
+    if heads_str is None or heads_str.strip() == '':
+        return None
+    import json
+    parsed = json.loads(heads_str)
+    return {int(k): v for k, v in parsed.items()}

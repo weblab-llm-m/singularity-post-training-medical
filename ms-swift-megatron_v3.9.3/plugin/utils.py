@@ -16,7 +16,8 @@ from peft.utils.other import ModulesToSaveWrapper
 from torch import nn
 
 from swift.utils import (activate_parameters, deep_getattr, find_layers, freeze_parameters, get_logger,
-                         get_model_parameter_info)
+                         get_model_parameter_info, pinpoint_freeze_parameters, parse_pinpoint_layers,
+                         parse_pinpoint_experts, parse_pinpoint_heads)
 
 logger = get_logger()
 
@@ -180,9 +181,44 @@ def prepare_adapter(model):
 def prepare_mcore_model(model):
     args = get_args()
     if args.train_type == 'full':
-        freeze_parameters(model, args.freeze_parameters_ratio, args.freeze_parameters, args.freeze_parameters_regex)
-        if args.trainable_parameters or args.trainable_parameters_regex:
-            activate_parameters(model, args.trainable_parameters, args.trainable_parameters_regex)
+        # ============================================================
+        # PinPointTuning or Standard Freeze
+        # ============================================================
+        if getattr(args, 'pinpoint_tuning', False):
+            # Parse PinPointTuning configurations
+            trainable_layers = parse_pinpoint_layers(getattr(args, 'pinpoint_trainable_layers', None))
+            trainable_experts = parse_pinpoint_experts(getattr(args, 'pinpoint_trainable_experts', None))
+            trainable_heads = parse_pinpoint_heads(getattr(args, 'pinpoint_trainable_heads', None))
+            
+            # Get model config for attention head parameters
+            num_attention_heads = getattr(args, 'num_attention_heads', None)
+            num_key_value_heads = getattr(args, 'num_query_groups', None)
+            hidden_size = getattr(args, 'hidden_size', None)
+            head_dim = None
+            if num_attention_heads and hidden_size:
+                head_dim = hidden_size // num_attention_heads
+            
+            # Apply PinPointTuning
+            pinpoint_freeze_parameters(
+                model,
+                trainable_layers=trainable_layers,
+                trainable_experts=trainable_experts,
+                trainable_heads=trainable_heads,
+                freeze_mlp=getattr(args, 'pinpoint_freeze_mlp', True),
+                freeze_attention=getattr(args, 'pinpoint_freeze_attention', False),
+                freeze_router=getattr(args, 'pinpoint_freeze_router', True),
+                freeze_shared_expert=getattr(args, 'pinpoint_freeze_shared_expert', True),
+                freeze_embed_lm_head=getattr(args, 'pinpoint_freeze_embed_lm_head', True),
+                num_attention_heads=num_attention_heads,
+                num_key_value_heads=num_key_value_heads,
+                head_dim=head_dim,
+            )
+        else:
+            # Standard freeze behavior
+            freeze_parameters(model, args.freeze_parameters_ratio, args.freeze_parameters, args.freeze_parameters_regex)
+            if args.trainable_parameters or args.trainable_parameters_regex:
+                activate_parameters(model, args.trainable_parameters, args.trainable_parameters_regex)
+        # ============================================================
     elif args.train_type == 'lora':
         model.prepare_inputs_for_generation = None  # fix error
         model = prepare_adapter(model)
