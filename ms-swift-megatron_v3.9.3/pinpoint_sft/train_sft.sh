@@ -25,7 +25,7 @@ MEGATRON_LM_PATH=${MEGATRON_LM_PATH:-$SWIFT_WORKDIR/containers/megatron-lm-core_
 SIF_FILE=${SIF_FILE:-$SWIFT_WORKDIR/containers/swift3.9.3.sif}
 
 # モデル
-LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-$HOME/downloads/models/Qwen_Qwen3-Next-80B-A3B-Instruct}
+LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-$HOME/downloads/models/Qwen_Qwen3-30B-A3B}
 MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 
 # データセット（SFT 用 JSONL, messages 形式）
@@ -76,6 +76,14 @@ export MASTER_PORT=${MASTER_PORT:-29500}
 export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-$(/sbin/ip route show default | awk "/default/ {print \$5}")}
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-$(echo "${NCCL_SOCKET_IFNAME}" | cut -d"," -f1)}
 export NNODES=${SLURM_JOB_NUM_NODES}
+
+
+# ============================================================
+#  PinPointTuning設定（スクリプト冒頭で定義）
+# ============================================================
+PINPOINT_LAYERS="5,10"
+PINPOINT_EXPERTS="5:3,7_10:1,4"
+PINPOINT_HEADS="5:0,1,2_10:3,4"
 
 # ============================================================
 #  プリウォーム（flash-attn ビルドキャッシュ）
@@ -145,6 +153,9 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
     --env WANDB_DIR="${OUTPUT_DIR}" \
     --env CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS}" \
     --env PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF}" \
+    --env PINPOINT_LAYERS="${PINPOINT_LAYERS}" \
+    --env PINPOINT_EXPERTS="${PINPOINT_EXPERTS}" \
+    --env PINPOINT_HEADS="${PINPOINT_HEADS}" \
     "${SIF_FILE}" bash -lc "
       set -xeuo pipefail
       ulimit -l unlimited || true
@@ -165,16 +176,23 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
         -m swift.cli._megatron.sft \
           --use_hf true \
           --model ${MODEL_PATH} \
-          --model_type qwen3_next \
+          --model_type qwen3_moe \
           --dataset ${DATASET_JSONL} \
           --split_dataset_ratio 0.01 \
           --bf16 true \
           --torch_dtype ${DTYPE} \
-          --train_type lora \
-          --lora_rank 8 \
-          --lora_alpha 32 \
-          --target_modules all-linear \
+          --train_type full \
           --load_safetensors true \
+          --no_initialization false \
+          --pinpoint_tuning true \
+          --pinpoint_trainable_layers "${PINPOINT_LAYERS}" \
+          --pinpoint_trainable_heads "${PINPOINT_HEADS}" \
+          --pinpoint_trainable_experts "${PINPOINT_EXPERTS}" \
+          --pinpoint_freeze_mlp false \
+          --pinpoint_freeze_attention false \
+          --pinpoint_freeze_router true \
+          --pinpoint_freeze_shared_expert true \
+          --pinpoint_freeze_embed_lm_head true \
           --finetune true \
           --tensor_model_parallel_size 1 \
           --pipeline_model_parallel_size 4 \
