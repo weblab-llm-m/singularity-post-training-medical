@@ -66,6 +66,7 @@ cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/check
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/megatron_args.py $HOME/swift-RL/containers/ms-swift/swift/megatron/argument/megatron_args.py
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/torch_utils.py $HOME/swift-RL/containers/ms-swift/swift/utils/torch_utils.py
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/utils.py $HOME/swift-RL/containers/ms-swift/swift/megatron/utils/utils.py
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/__init__.py $HOME/swift-RL/containers/ms-swift/swift/utils/__init__.py
 ```
 
 起動時に **コンテナへ bind** し、**`MEGATRON_LM_PATH`** と **`PYTHONPATH`** に追加します。(実装済み)
