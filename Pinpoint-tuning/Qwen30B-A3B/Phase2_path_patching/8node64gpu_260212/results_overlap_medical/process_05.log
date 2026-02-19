@@ -1,0 +1,849 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+
+============================================================
+Medical Path Patching Configuration (MoE Enhanced)
+============================================================
+Model: /home/yuuki.nakamura/downloads/models/Qwen_Qwen3-30B-A3B-Instruct-2507
+Data: /home/yuuki.nakamura/singularity-post-training-medical/Pinpoint-tuning/Qwen30B-A3B/Phase2_path_patching/8node64gpu_260212/results_overlap_medical/data_chunks/chunk_05.jsonl
+Batch size: 1
+Analyze experts: False
+============================================================
+
+Loading model...
+Loading checkpoint shards:   0%|          | 0/16 [00:00<?, ?it/s]Loading checkpoint shards:   6%|▋         | 1/16 [00:01<00:26,  1.80s/it]Loading checkpoint shards:  12%|█▎        | 2/16 [00:03<00:24,  1.79s/it]Loading checkpoint shards:  19%|█▉        | 3/16 [00:05<00:23,  1.79s/it]Loading checkpoint shards:  25%|██▌       | 4/16 [00:07<00:21,  1.81s/it]Loading checkpoint shards:  31%|███▏      | 5/16 [00:09<00:19,  1.81s/it]Loading checkpoint shards:  38%|███▊      | 6/16 [00:10<00:17,  1.80s/it]Loading checkpoint shards:  44%|████▍     | 7/16 [00:12<00:16,  1.78s/it]Loading checkpoint shards:  50%|█████     | 8/16 [00:14<00:14,  1.78s/it]Loading checkpoint shards:  56%|█████▋    | 9/16 [00:16<00:12,  1.77s/it]Loading checkpoint shards:  62%|██████▎   | 10/16 [00:17<00:10,  1.76s/it]Loading checkpoint shards:  69%|██████▉   | 11/16 [00:19<00:08,  1.76s/it]Loading checkpoint shards:  75%|███████▌  | 12/16 [00:21<00:07,  1.77s/it]Loading checkpoint shards:  81%|████████▏ | 13/16 [00:23<00:05,  1.77s/it]Loading checkpoint shards:  88%|████████▊ | 14/16 [00:24<00:03,  1.77s/it]Loading checkpoint shards:  94%|█████████▍| 15/16 [00:26<00:01,  1.78s/it]Loading checkpoint shards: 100%|██████████| 16/16 [00:27<00:00,  1.38s/it]Loading checkpoint shards: 100%|██████████| 16/16 [00:27<00:00,  1.70s/it]
+Model loaded: qwen3_moe
+Using built-in config for model type: qwen3_moe
+Module input name: model.layers.{i}.input_layernorm
+Module output name: model.layers.{i}.self_attn.o_proj
+Is MoE model: True
+MoE Config: 128 experts, 8 active per token
+
+Loading dataset from: /home/yuuki.nakamura/singularity-post-training-medical/Pinpoint-tuning/Qwen30B-A3B/Phase2_path_patching/8node64gpu_260212/results_overlap_medical/data_chunks/chunk_05.jsonl
+Total samples: 79
+Using samples: 79
+
+Xr from dataset:
+------------------------------
+尿毒症でみられないのはどれか。
+a. 巨大舌
+b. 乏尿
+c. 貧血
+d. 肺水腫
+e. 意識障害
+
+Xc from dataset:
+------------------------------
+健康状態でみられないのはどれか。
+a. 巨大舌
+b. 乏尿
+c. 貧血
+d. 肺水腫
+e. 意識障害
+
+Model architecture:
+  Layers: 48
+  Query Heads: 32
+  KV Heads: 4
+  KV Groups: 8
+  Head dim: 128
+  Total attention heads: 1536
+
+Starting path patching...
+Processing 79 samples in batches of 1
+Estimated batches: 79
+Batches:   0%|          | 0/79 [00:00<?, ?it/s]Default logit diff: tensor([0.2266], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([26.0000, 23.8750, 19.8750, 18.8750, 18.8750, 18.5000, 18.3750, 18.2500,
+        18.1250, 18.0000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  271,   198,   220,  4710,  1406,  9909, 71928, 18611,  2303, 10236],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:15<11:54, 15.21s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:30<11:33, 15.07s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:45<11:16, 15.04s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:00<11:00, 15.01s/it][A
+Path patching layers:  10%|█         | 5/48 [01:15<10:44, 14.99s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:30<10:28, 14.97s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:45<10:13, 14.97s/it][A
+Path patching layers:  17%|█▋        | 8/48 [01:59<09:58, 14.97s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:14<09:44, 14.97s/it][A
+Path patching layers:  21%|██        | 10/48 [02:29<09:28, 14.97s/it][A
+Path patching layers:  23%|██▎       | 11/48 [02:44<09:13, 14.96s/it][A
+Path patching layers:  25%|██▌       | 12/48 [02:59<08:58, 14.96s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:14<08:43, 14.96s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:29<08:28, 14.97s/it][A
+Path patching layers:  31%|███▏      | 15/48 [03:44<08:13, 14.97s/it][A
+Path patching layers:  33%|███▎      | 16/48 [03:59<07:58, 14.96s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:14<07:43, 14.96s/it][A
+Path patching layers:  38%|███▊      | 18/48 [04:29<07:28, 14.96s/it][A
+Path patching layers:  40%|███▉      | 19/48 [04:44<07:13, 14.96s/it][A
+Path patching layers:  42%|████▏     | 20/48 [04:59<06:58, 14.96s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:14<06:43, 14.96s/it][A
+Path patching layers:  46%|████▌     | 22/48 [05:29<06:28, 14.96s/it][A
+Path patching layers:  48%|████▊     | 23/48 [05:44<06:13, 14.96s/it][A
+Path patching layers:  50%|█████     | 24/48 [05:59<05:58, 14.95s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [06:14<05:43, 14.94s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [06:29<05:28, 14.94s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [06:44<05:13, 14.94s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [06:59<04:58, 14.94s/it][A
+Path patching layers:  60%|██████    | 29/48 [07:13<04:43, 14.94s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [07:28<04:28, 14.94s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [07:43<04:13, 14.94s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [07:58<03:59, 14.94s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [08:13<03:43, 14.93s/it][A
+Path patching layers:  71%|███████   | 34/48 [08:28<03:28, 14.92s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [08:43<03:13, 14.92s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [08:58<02:58, 14.91s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [09:13<02:44, 14.91s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [09:28<02:29, 14.91s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [09:43<02:14, 14.91s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [09:58<01:59, 14.92s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [10:13<01:44, 14.92s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [10:27<01:29, 14.93s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [10:42<01:14, 14.92s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [10:57<00:59, 14.91s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [11:12<00:44, 14.90s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [11:27<00:29, 14.90s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [11:42<00:14, 14.89s/it][A
+Path patching layers: 100%|██████████| 48/48 [11:57<00:00, 14.89s/it][APath patching layers: 100%|██████████| 48/48 [11:57<00:00, 14.94s/it]
+Batches:   1%|▏         | 1/79 [11:59<15:35:01, 719.25s/it]Default logit diff: tensor([0.2002], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([26.8750, 24.2500, 20.6250, 20.3750, 19.5000, 19.0000, 19.0000, 18.7500,
+        18.5000, 18.3750], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  271,   198,  2303,   220, 18611, 71928,  1406,  4710, 10236,  8908],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:18<14:27, 18.46s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:36<14:08, 18.46s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:55<13:50, 18.46s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:13<13:32, 18.46s/it][A
+Path patching layers:  10%|█         | 5/48 [01:32<13:13, 18.46s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:50<12:55, 18.46s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:09<12:36, 18.46s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:27<12:18, 18.47s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:46<11:59, 18.46s/it][A
+Path patching layers:  21%|██        | 10/48 [03:04<11:41, 18.45s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:23<11:22, 18.45s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:41<11:04, 18.45s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:59<10:45, 18.45s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:18<10:27, 18.45s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:36<10:08, 18.45s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:55<09:52, 18.51s/it][A
+Path patching layers:  35%|███▌      | 17/48 [05:13<09:32, 18.48s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:32<09:14, 18.47s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:50<08:55, 18.46s/it][A
+Path patching layers:  42%|████▏     | 20/48 [06:09<08:36, 18.45s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:27<08:18, 18.45s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:46<07:59, 18.45s/it][A
+Path patching layers:  48%|████▊     | 23/48 [07:04<07:41, 18.45s/it][A
+Path patching layers:  50%|█████     | 24/48 [07:22<07:22, 18.44s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:41<07:04, 18.44s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:59<06:45, 18.43s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [08:18<06:27, 18.43s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:36<06:08, 18.43s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:55<05:50, 18.42s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [09:13<05:31, 18.41s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [09:31<05:13, 18.42s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:50<04:54, 18.43s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [10:08<04:36, 18.44s/it][A
+Path patching layers:  71%|███████   | 34/48 [10:27<04:18, 18.45s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [10:45<03:59, 18.45s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [11:04<03:41, 18.44s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [11:22<03:22, 18.44s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [11:41<03:04, 18.43s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [11:59<02:45, 18.43s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [12:17<02:27, 18.43s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [12:36<02:09, 18.43s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [12:54<01:50, 18.43s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [13:13<01:32, 18.44s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [13:31<01:13, 18.43s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [13:50<00:55, 18.43s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [14:08<00:36, 18.43s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [14:27<00:18, 18.49s/it][A
+Path patching layers: 100%|██████████| 48/48 [14:45<00:00, 18.50s/it][APath patching layers: 100%|██████████| 48/48 [14:45<00:00, 18.45s/it]
+Batches:   3%|▎         | 2/79 [26:46<17:30:06, 818.27s/it]Default logit diff: tensor([0.2275], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([25.2500, 24.1250, 23.2500, 20.8750, 20.3750, 19.1250, 18.7500, 18.7500,
+        18.5000, 18.5000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  271,   198,  9909,   320,   220,     7, 71928, 22441, 10236, 42344],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:16<12:52, 16.45s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:32<12:37, 16.46s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:49<12:19, 16.44s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:05<12:02, 16.42s/it][A
+Path patching layers:  10%|█         | 5/48 [01:22<11:44, 16.39s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:38<11:27, 16.37s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:54<11:10, 16.36s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:11<10:54, 16.36s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:27<10:38, 16.36s/it][A
+Path patching layers:  21%|██        | 10/48 [02:43<10:21, 16.35s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:00<10:04, 16.35s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:16<09:48, 16.35s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:32<09:32, 16.35s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:49<09:15, 16.35s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:05<08:59, 16.36s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:21<08:43, 16.35s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:38<08:26, 16.34s/it][A
+Path patching layers:  38%|███▊      | 18/48 [04:54<08:10, 16.34s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:10<07:53, 16.34s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:27<07:37, 16.34s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:43<07:21, 16.35s/it][A
+Path patching layers:  46%|████▌     | 22/48 [05:59<07:04, 16.34s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:16<06:48, 16.34s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:32<06:31, 16.33s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [06:48<06:15, 16.32s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:05<05:59, 16.32s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:21<05:42, 16.31s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [07:37<05:25, 16.30s/it][A
+Path patching layers:  60%|██████    | 29/48 [07:54<05:09, 16.29s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [08:10<04:53, 16.29s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:26<04:36, 16.28s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [08:42<04:20, 16.27s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [08:59<04:03, 16.26s/it][A
+Path patching layers:  71%|███████   | 34/48 [09:15<03:47, 16.27s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [09:31<03:31, 16.28s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [09:47<03:15, 16.28s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [10:04<02:59, 16.29s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:20<02:42, 16.29s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [10:36<02:26, 16.29s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [10:53<02:10, 16.28s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [11:09<01:53, 16.28s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [11:25<01:37, 16.27s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [11:41<01:21, 16.27s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [11:58<01:05, 16.27s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [12:14<00:48, 16.27s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [12:30<00:32, 16.27s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [12:46<00:16, 16.28s/it][A
+Path patching layers: 100%|██████████| 48/48 [13:03<00:00, 16.28s/it][APath patching layers: 100%|██████████| 48/48 [13:03<00:00, 16.32s/it]
+Batches:   4%|▍         | 3/79 [39:51<16:57:09, 803.01s/it]Default logit diff: tensor([0.2012], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([20.6250, 18.7500, 17.0000, 16.2500, 16.2500, 15.3750, 15.3750, 15.3750,
+        15.3125, 15.1875], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([   271,    198,  24339,  15767,   9909,  81812, 101775,    220, 100521,
+         39907], device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:17<13:32, 17.28s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:34<13:14, 17.26s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:51<12:56, 17.26s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:09<12:39, 17.26s/it][A
+Path patching layers:  10%|█         | 5/48 [01:26<12:22, 17.27s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:43<12:05, 17.26s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:00<11:47, 17.26s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:18<11:31, 17.28s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:35<11:13, 17.28s/it][A
+Path patching layers:  21%|██        | 10/48 [02:52<10:56, 17.27s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:09<10:38, 17.27s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:27<10:21, 17.26s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:44<10:03, 17.26s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:01<09:46, 17.26s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:18<09:29, 17.26s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:36<09:12, 17.26s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:53<08:55, 17.26s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:10<08:37, 17.26s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:27<08:20, 17.26s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:45<08:03, 17.26s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:02<07:45, 17.25s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:19<07:29, 17.30s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:37<07:11, 17.26s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:54<06:53, 17.24s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:11<06:36, 17.22s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:28<06:18, 17.21s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:45<06:01, 17.20s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:03<05:44, 17.21s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:20<05:26, 17.20s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [08:37<05:09, 17.20s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:54<04:52, 17.20s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:11<04:35, 17.20s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [09:28<04:17, 17.19s/it][A
+Path patching layers:  71%|███████   | 34/48 [09:46<04:00, 17.20s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [10:03<03:43, 17.20s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [10:20<03:26, 17.20s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [10:37<03:09, 17.19s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:54<02:51, 17.19s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [11:12<02:34, 17.18s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [11:29<02:17, 17.19s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [11:46<02:00, 17.19s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [12:03<01:43, 17.20s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [12:20<01:25, 17.20s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [12:38<01:08, 17.20s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [12:55<00:51, 17.20s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [13:12<00:34, 17.19s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [13:29<00:17, 17.19s/it][A
+Path patching layers: 100%|██████████| 48/48 [13:46<00:00, 17.19s/it][APath patching layers: 100%|██████████| 48/48 [13:46<00:00, 17.23s/it]
+Batches:   5%|▌         | 4/79 [53:40<16:56:20, 813.08s/it]Default logit diff: tensor([0.2002], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([21.5000, 21.3750, 20.3750, 19.8750, 19.1250, 19.0000, 17.3750, 16.5000,
+        16.3750, 16.1250], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([ 15767,    271, 127535,    198, 117939, 102505,   9909,  28195, 107521,
+         25870], device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:15<12:24, 15.84s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:31<12:08, 15.83s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:47<11:52, 15.83s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:03<11:36, 15.83s/it][A
+Path patching layers:  10%|█         | 5/48 [01:19<11:21, 15.84s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:35<11:05, 15.84s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:50<10:48, 15.83s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:06<10:33, 15.83s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:22<10:17, 15.83s/it][A
+Path patching layers:  21%|██        | 10/48 [02:38<10:01, 15.83s/it][A
+Path patching layers:  23%|██▎       | 11/48 [02:54<09:45, 15.83s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:09<09:29, 15.83s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:25<09:14, 15.83s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:41<08:58, 15.83s/it][A
+Path patching layers:  31%|███▏      | 15/48 [03:57<08:42, 15.83s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:13<08:27, 15.85s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:29<08:10, 15.84s/it][A
+Path patching layers:  38%|███▊      | 18/48 [04:44<07:54, 15.83s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:00<07:39, 15.83s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:16<07:23, 15.83s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:32<07:07, 15.82s/it][A
+Path patching layers:  46%|████▌     | 22/48 [05:48<06:51, 15.82s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:04<06:35, 15.82s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:19<06:19, 15.81s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [06:35<06:03, 15.81s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [06:51<05:47, 15.81s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:07<05:32, 15.82s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [07:23<05:16, 15.82s/it][A
+Path patching layers:  60%|██████    | 29/48 [07:38<05:00, 15.81s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [07:54<04:44, 15.80s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:10<04:28, 15.79s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [08:26<04:12, 15.79s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [08:42<03:58, 15.89s/it][A
+Path patching layers:  71%|███████   | 34/48 [08:58<03:42, 15.91s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [09:14<03:26, 15.91s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [09:30<03:11, 15.92s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [09:46<02:55, 15.92s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:02<02:39, 15.93s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [10:17<02:23, 15.92s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [10:33<02:07, 15.92s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [10:49<01:51, 15.92s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [11:05<01:35, 15.91s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [11:21<01:19, 15.92s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [11:37<01:03, 15.95s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [11:53<00:47, 15.95s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [12:09<00:31, 15.94s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [12:25<00:15, 15.93s/it][A
+Path patching layers: 100%|██████████| 48/48 [12:41<00:00, 15.92s/it][APath patching layers: 100%|██████████| 48/48 [12:41<00:00, 15.86s/it]
+Batches:   6%|▋         | 5/79 [1:06:23<16:20:26, 794.96s/it]Default logit diff: tensor([0.1963], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([25.2500, 23.3750, 19.6250, 19.0000, 19.0000, 18.5000, 18.3750, 18.1250,
+        18.0000, 17.8750], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([   271,    198,    220,  71928,   9909,   4710,  85122,   1406,  10236,
+        129770], device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:15<12:29, 15.95s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:31<12:14, 15.96s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:47<11:58, 15.97s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:03<11:42, 15.96s/it][A
+Path patching layers:  10%|█         | 5/48 [01:19<11:26, 15.96s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:35<11:10, 15.96s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:51<10:54, 15.96s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:07<10:38, 15.95s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:23<10:21, 15.94s/it][A
+Path patching layers:  21%|██        | 10/48 [02:39<10:05, 15.94s/it][A
+Path patching layers:  23%|██▎       | 11/48 [02:55<09:49, 15.94s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:11<09:33, 15.94s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:27<09:18, 15.94s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:43<09:02, 15.94s/it][A
+Path patching layers:  31%|███▏      | 15/48 [03:59<08:46, 15.96s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:15<08:29, 15.93s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:30<08:12, 15.89s/it][A
+Path patching layers:  38%|███▊      | 18/48 [04:46<07:55, 15.86s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:02<07:39, 15.84s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:18<07:23, 15.83s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:34<07:07, 15.83s/it][A
+Path patching layers:  46%|████▌     | 22/48 [05:49<06:51, 15.82s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:05<06:35, 15.81s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:21<06:19, 15.82s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [06:37<06:03, 15.81s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [06:53<05:47, 15.80s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:08<05:31, 15.79s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [07:24<05:16, 15.84s/it][A
+Path patching layers:  60%|██████    | 29/48 [07:40<05:00, 15.81s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [07:56<04:44, 15.79s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:12<04:28, 15.77s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [08:27<04:12, 15.76s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [08:43<03:56, 15.76s/it][A
+Path patching layers:  71%|███████   | 34/48 [08:59<03:40, 15.77s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [09:15<03:25, 15.78s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [09:30<03:09, 15.77s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [09:46<02:53, 15.76s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:02<02:37, 15.75s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [10:18<02:21, 15.74s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [10:33<02:05, 15.75s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [10:49<01:50, 15.74s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [11:05<01:34, 15.74s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [11:21<01:18, 15.74s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [11:36<01:02, 15.73s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [11:52<00:47, 15.73s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [12:08<00:31, 15.73s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [12:24<00:15, 15.73s/it][A
+Path patching layers: 100%|██████████| 48/48 [12:39<00:00, 15.73s/it][APath patching layers: 100%|██████████| 48/48 [12:39<00:00, 15.83s/it]
+Batches:   8%|▊         | 6/79 [1:19:04<15:53:14, 783.49s/it]Default logit diff: tensor([0.2061], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([21.2500, 20.3750, 20.3750, 20.0000, 19.8750, 19.1250, 18.6250, 18.6250,
+        18.1250, 18.0000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([71928,  4710,   715,   220, 18137,   358,  2303, 17587, 85122,  6567],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:21<16:54, 21.58s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:43<16:32, 21.58s/it][A
+Path patching layers:   6%|▋         | 3/48 [01:04<16:11, 21.58s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:26<15:49, 21.58s/it][A
+Path patching layers:  10%|█         | 5/48 [01:47<15:27, 21.58s/it][A
+Path patching layers:  12%|█▎        | 6/48 [02:09<15:06, 21.58s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:31<14:44, 21.58s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:52<14:23, 21.59s/it][A
+Path patching layers:  19%|█▉        | 9/48 [03:14<14:01, 21.58s/it][A
+Path patching layers:  21%|██        | 10/48 [03:35<13:39, 21.58s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:57<13:18, 21.58s/it][A
+Path patching layers:  25%|██▌       | 12/48 [04:18<12:56, 21.57s/it][A
+Path patching layers:  27%|██▋       | 13/48 [04:40<12:35, 21.57s/it][A
+Path patching layers:  29%|██▉       | 14/48 [05:02<12:13, 21.58s/it][A
+Path patching layers:  31%|███▏      | 15/48 [05:23<11:52, 21.58s/it][A
+Path patching layers:  33%|███▎      | 16/48 [05:45<11:30, 21.59s/it][A
+Path patching layers:  35%|███▌      | 17/48 [06:06<11:09, 21.58s/it][A
+Path patching layers:  38%|███▊      | 18/48 [06:28<10:47, 21.57s/it][A
+Path patching layers:  40%|███▉      | 19/48 [06:49<10:25, 21.57s/it][A
+Path patching layers:  42%|████▏     | 20/48 [07:11<10:03, 21.57s/it][A
+Path patching layers:  44%|████▍     | 21/48 [07:33<09:42, 21.57s/it][A
+Path patching layers:  46%|████▌     | 22/48 [07:54<09:21, 21.58s/it][A
+Path patching layers:  48%|████▊     | 23/48 [08:16<08:59, 21.57s/it][A
+Path patching layers:  50%|█████     | 24/48 [08:37<08:37, 21.56s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [08:59<08:16, 21.57s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [09:20<07:54, 21.56s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [09:42<07:32, 21.56s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [10:04<07:11, 21.57s/it][A
+Path patching layers:  60%|██████    | 29/48 [10:25<06:49, 21.58s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [10:47<06:28, 21.58s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [11:08<06:06, 21.57s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [11:30<05:45, 21.56s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [11:51<05:23, 21.57s/it][A
+Path patching layers:  71%|███████   | 34/48 [12:13<05:01, 21.56s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [12:34<04:40, 21.55s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [12:56<04:18, 21.55s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [13:18<03:56, 21.54s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [13:39<03:35, 21.54s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [14:01<03:13, 21.53s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [14:22<02:52, 21.53s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [14:44<02:30, 21.54s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [15:05<02:09, 21.53s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [15:27<01:47, 21.54s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [15:48<01:26, 21.55s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [16:10<01:04, 21.55s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [16:31<00:43, 21.54s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [16:53<00:21, 21.54s/it][A
+Path patching layers: 100%|██████████| 48/48 [17:14<00:00, 21.54s/it][APath patching layers: 100%|██████████| 48/48 [17:15<00:00, 21.56s/it]
+Batches:   9%|▉         | 7/79 [1:36:21<17:19:44, 866.45s/it]Default logit diff: tensor([0.2363], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([25.1250, 23.2500, 19.8750, 19.2500, 19.1250, 19.1250, 18.8750, 18.7500,
+        18.6250, 18.5000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  271,   198,   220, 71928,  4710,  2303, 18611,  1406,  6567,   320],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:18<14:13, 18.15s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:36<13:54, 18.15s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:54<13:36, 18.14s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:12<13:17, 18.13s/it][A
+Path patching layers:  10%|█         | 5/48 [01:30<13:00, 18.14s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:48<12:42, 18.15s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:07<12:24, 18.15s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:25<12:06, 18.16s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:43<11:48, 18.18s/it][A
+Path patching layers:  21%|██        | 10/48 [03:01<11:30, 18.17s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:19<11:12, 18.17s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:37<10:54, 18.18s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:56<10:35, 18.16s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:14<10:17, 18.16s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:32<09:59, 18.16s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:50<09:40, 18.16s/it][A
+Path patching layers:  35%|███▌      | 17/48 [05:08<09:22, 18.15s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:26<09:04, 18.15s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:44<08:46, 18.15s/it][A
+Path patching layers:  42%|████▏     | 20/48 [06:03<08:28, 18.15s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:21<08:10, 18.15s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:39<07:51, 18.15s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:57<07:33, 18.14s/it][A
+Path patching layers:  50%|█████     | 24/48 [07:15<07:15, 18.14s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:33<06:57, 18.14s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:51<06:39, 18.14s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [08:10<06:20, 18.14s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:28<06:02, 18.13s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:46<05:44, 18.12s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [09:04<05:26, 18.12s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [09:22<05:09, 18.19s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:41<04:51, 18.21s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [09:59<04:32, 18.20s/it][A
+Path patching layers:  71%|███████   | 34/48 [10:17<04:16, 18.29s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [10:35<03:57, 18.26s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [10:54<03:38, 18.21s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [11:12<03:19, 18.18s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [11:30<03:01, 18.16s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [11:48<02:43, 18.14s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [12:06<02:25, 18.14s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [12:24<02:06, 18.13s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [12:42<01:48, 18.12s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [13:00<01:30, 18.13s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [13:18<01:12, 18.12s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [13:36<00:54, 18.11s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [13:55<00:36, 18.10s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [14:13<00:18, 18.10s/it][A
+Path patching layers: 100%|██████████| 48/48 [14:31<00:00, 18.10s/it][APath patching layers: 100%|██████████| 48/48 [14:31<00:00, 18.15s/it]
+Batches:  10%|█         | 8/79 [1:50:54<17:07:45, 868.53s/it]Default logit diff: tensor([0.2158], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([21.6250, 20.6250, 20.5000, 20.2500, 19.3750, 18.7500, 18.6250, 18.5000,
+        18.1250, 18.0000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([71928,   220,  4710,   715, 18137,  2303,  6567, 85122, 17587, 36556],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:22<17:22, 22.19s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:44<16:59, 22.16s/it][A
+Path patching layers:   6%|▋         | 3/48 [01:06<16:38, 22.18s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:28<16:15, 22.17s/it][A
+Path patching layers:  10%|█         | 5/48 [01:50<15:53, 22.18s/it][A
+Path patching layers:  12%|█▎        | 6/48 [02:13<15:31, 22.19s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:35<15:09, 22.18s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:57<14:47, 22.18s/it][A
+Path patching layers:  19%|█▉        | 9/48 [03:19<14:24, 22.17s/it][A
+Path patching layers:  21%|██        | 10/48 [03:41<14:02, 22.18s/it][A
+Path patching layers:  23%|██▎       | 11/48 [04:04<13:41, 22.20s/it][A
+Path patching layers:  25%|██▌       | 12/48 [04:26<13:19, 22.20s/it][A
+Path patching layers:  27%|██▋       | 13/48 [04:48<12:56, 22.19s/it][A
+Path patching layers:  29%|██▉       | 14/48 [05:10<12:34, 22.18s/it][A
+Path patching layers:  31%|███▏      | 15/48 [05:32<12:11, 22.18s/it][A
+Path patching layers:  33%|███▎      | 16/48 [05:54<11:49, 22.18s/it][A
+Path patching layers:  35%|███▌      | 17/48 [06:17<11:27, 22.17s/it][A
+Path patching layers:  38%|███▊      | 18/48 [06:39<11:05, 22.18s/it][A
+Path patching layers:  40%|███▉      | 19/48 [07:01<10:43, 22.18s/it][A
+Path patching layers:  42%|████▏     | 20/48 [07:23<10:20, 22.18s/it][A
+Path patching layers:  44%|████▍     | 21/48 [07:45<09:59, 22.19s/it][A
+Path patching layers:  46%|████▌     | 22/48 [08:08<09:37, 22.20s/it][A
+Path patching layers:  48%|████▊     | 23/48 [08:30<09:14, 22.19s/it][A
+Path patching layers:  50%|█████     | 24/48 [08:52<08:52, 22.19s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [09:14<08:30, 22.18s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [09:36<08:07, 22.18s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [09:58<07:45, 22.17s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [10:20<07:23, 22.16s/it][A
+Path patching layers:  60%|██████    | 29/48 [10:43<07:00, 22.15s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [11:05<06:38, 22.17s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [11:27<06:16, 22.15s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [11:49<05:54, 22.16s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [12:11<05:32, 22.17s/it][A
+Path patching layers:  71%|███████   | 34/48 [12:33<05:10, 22.16s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [12:56<04:48, 22.16s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [13:18<04:25, 22.15s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [13:40<04:03, 22.15s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [14:02<03:41, 22.16s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [14:24<03:19, 22.15s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [14:46<02:57, 22.14s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [15:08<02:35, 22.15s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [15:31<02:12, 22.15s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [15:53<01:50, 22.15s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [16:15<01:28, 22.15s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [16:37<01:06, 22.16s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [16:59<00:44, 22.16s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [17:21<00:22, 22.17s/it][A
+Path patching layers: 100%|██████████| 48/48 [17:44<00:00, 22.20s/it][APath patching layers: 100%|██████████| 48/48 [17:44<00:00, 22.17s/it]
+Batches:  11%|█▏        | 9/79 [2:08:41<18:05:29, 930.42s/it]Default logit diff: tensor([0.2100], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([20.0000, 18.8750, 18.1250, 18.0000, 17.8750, 17.5000, 17.3750, 17.3750,
+        16.5000, 16.2500], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  1406,   2303,   4710,    220,  71928,  18611,  36556,    715,  22441,
+        102456], device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:17<13:28, 17.19s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:34<13:09, 17.17s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:51<12:52, 17.17s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:08<12:36, 17.18s/it][A
+Path patching layers:  10%|█         | 5/48 [01:25<12:19, 17.19s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:43<12:02, 17.19s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:00<11:45, 17.21s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:17<11:27, 17.20s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:34<11:10, 17.19s/it][A
+Path patching layers:  21%|██        | 10/48 [02:51<10:52, 17.18s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:09<10:35, 17.17s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:26<10:17, 17.16s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:43<10:00, 17.15s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:00<09:43, 17.15s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:17<09:26, 17.15s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:34<09:08, 17.16s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:51<08:51, 17.16s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:09<08:34, 17.16s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:26<08:17, 17.16s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:43<08:00, 17.16s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:00<07:43, 17.16s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:17<07:26, 17.16s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:34<07:09, 17.16s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:52<06:51, 17.17s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:09<06:34, 17.17s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:26<06:17, 17.15s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:43<05:59, 17.14s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:00<05:42, 17.13s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:17<05:25, 17.14s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [08:34<05:09, 17.18s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:52<04:52, 17.18s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:09<04:34, 17.16s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [09:26<04:17, 17.15s/it][A
+Path patching layers:  71%|███████   | 34/48 [09:43<03:59, 17.13s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [10:00<03:42, 17.13s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [10:17<03:25, 17.15s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [10:34<03:08, 17.14s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:52<02:51, 17.14s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [11:09<02:34, 17.19s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [11:26<02:17, 17.15s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [11:43<01:59, 17.13s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [12:00<01:42, 17.11s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [12:17<01:25, 17.11s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [12:34<01:08, 17.09s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [12:51<00:51, 17.08s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [13:08<00:34, 17.09s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [13:25<00:17, 17.08s/it][A
+Path patching layers: 100%|██████████| 48/48 [13:43<00:00, 17.07s/it][APath patching layers: 100%|██████████| 48/48 [13:43<00:00, 17.15s/it]
+Batches:  13%|█▎        | 10/79 [2:22:25<17:12:26, 897.78s/it]  Processed 10/79 samples
+Default logit diff: tensor([0.2217], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([20.1250, 19.0000, 18.7500, 18.0000, 18.0000, 17.6250, 17.5000, 17.3750,
+        17.2500, 17.2500], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([71928,  1406,   220, 36556,  2303, 18137, 85122,   715,  4710,  8908],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:17<13:23, 17.09s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:34<13:06, 17.10s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:51<12:49, 17.10s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:08<12:32, 17.10s/it][A
+Path patching layers:  10%|█         | 5/48 [01:25<12:15, 17.11s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:42<11:58, 17.11s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:59<11:42, 17.13s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:16<11:25, 17.13s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:34<11:07, 17.12s/it][A
+Path patching layers:  21%|██        | 10/48 [02:51<10:50, 17.12s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:08<10:33, 17.11s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:25<10:15, 17.11s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:42<09:58, 17.11s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:59<09:41, 17.12s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:16<09:24, 17.11s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:33<09:07, 17.11s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:50<08:50, 17.11s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:07<08:33, 17.10s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:25<08:16, 17.11s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:42<07:58, 17.10s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:59<07:41, 17.09s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:16<07:24, 17.09s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:33<07:07, 17.11s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:50<06:50, 17.11s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:07<06:33, 17.09s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:24<06:15, 17.08s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:41<05:58, 17.07s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [07:58<05:41, 17.06s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:15<05:23, 17.05s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [08:32<05:06, 17.05s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:49<04:49, 17.05s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:06<04:32, 17.05s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [09:24<04:15, 17.05s/it][A
+Path patching layers:  71%|███████   | 34/48 [09:41<03:58, 17.06s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [09:58<03:41, 17.07s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [10:15<03:24, 17.06s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [10:32<03:07, 17.05s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:49<02:50, 17.05s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [11:06<02:33, 17.04s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [11:23<02:16, 17.05s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [11:40<01:59, 17.06s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [11:57<01:42, 17.04s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [12:14<01:25, 17.04s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [12:31<01:08, 17.05s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [12:48<00:51, 17.04s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [13:05<00:34, 17.03s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [13:22<00:17, 17.03s/it][A
+Path patching layers: 100%|██████████| 48/48 [13:39<00:00, 17.03s/it][APath patching layers: 100%|██████████| 48/48 [13:39<00:00, 17.08s/it]
+Batches:  14%|█▍        | 11/79 [2:36:06<16:30:57, 874.37s/it]Default logit diff: tensor([0.2246], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([25.2500, 24.0000, 21.1250, 20.1250, 18.6250, 18.5000, 18.3750, 18.0000,
+        18.0000, 18.0000], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([  271,   198, 71928,   220,  4710,  1406, 85122, 10236,  6567,  2303],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:16<13:08, 16.77s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:33<12:51, 16.77s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:50<12:36, 16.81s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:07<12:19, 16.81s/it][A
+Path patching layers:  10%|█         | 5/48 [01:23<12:02, 16.79s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:40<11:44, 16.78s/it][A
+Path patching layers:  15%|█▍        | 7/48 [01:57<11:28, 16.78s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:14<11:11, 16.79s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:31<10:54, 16.78s/it][A
+Path patching layers:  21%|██        | 10/48 [02:47<10:37, 16.78s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:04<10:21, 16.79s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:21<10:04, 16.79s/it][A
+Path patching layers:  27%|██▋       | 13/48 [03:38<09:48, 16.81s/it][A
+Path patching layers:  29%|██▉       | 14/48 [03:55<09:31, 16.80s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:11<09:14, 16.80s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:28<08:57, 16.79s/it][A
+Path patching layers:  35%|███▌      | 17/48 [04:45<08:40, 16.79s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:02<08:23, 16.78s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:18<08:06, 16.78s/it][A
+Path patching layers:  42%|████▏     | 20/48 [05:35<07:49, 16.77s/it][A
+Path patching layers:  44%|████▍     | 21/48 [05:52<07:32, 16.78s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:09<07:16, 16.77s/it][A
+Path patching layers:  48%|████▊     | 23/48 [06:26<06:59, 16.76s/it][A
+Path patching layers:  50%|█████     | 24/48 [06:42<06:42, 16.76s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [06:59<06:25, 16.76s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [07:16<06:08, 16.75s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [07:32<05:51, 16.74s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [07:49<05:34, 16.74s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:06<05:17, 16.73s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [08:23<05:00, 16.72s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [08:39<04:44, 16.72s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [08:56<04:27, 16.72s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [09:13<04:10, 16.73s/it][A
+Path patching layers:  71%|███████   | 34/48 [09:30<03:54, 16.74s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [09:46<03:37, 16.74s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [10:03<03:20, 16.74s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [10:20<03:04, 16.73s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [10:36<02:47, 16.72s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [10:53<02:30, 16.72s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [11:10<02:13, 16.71s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [11:27<01:57, 16.72s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [11:43<01:40, 16.73s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [12:00<01:23, 16.72s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [12:17<01:06, 16.71s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [12:33<00:50, 16.71s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [12:50<00:33, 16.71s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [13:07<00:16, 16.71s/it][A
+Path patching layers: 100%|██████████| 48/48 [13:24<00:00, 16.71s/it][APath patching layers: 100%|██████████| 48/48 [13:24<00:00, 16.75s/it]
+Batches:  15%|█▌        | 12/79 [2:49:32<15:53:01, 853.46s/it]Default logit diff: tensor([0.2109], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([20.1250, 19.5000, 18.8750, 18.2500, 18.1250, 17.5000, 17.5000, 17.3750,
+        17.3750, 17.1250], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([ 1406, 71928,   220,  4710,  2303, 85122, 36556,   715,  8908, 18611],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:18<14:37, 18.68s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:37<14:23, 18.77s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:56<14:00, 18.68s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:14<13:44, 18.73s/it][A
+Path patching layers:  10%|█         | 5/48 [01:33<13:23, 18.69s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:52<13:03, 18.65s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:10<12:43, 18.62s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:29<12:24, 18.61s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:47<12:05, 18.60s/it][A
+Path patching layers:  21%|██        | 10/48 [03:06<11:46, 18.59s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:24<11:27, 18.59s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:43<11:09, 18.59s/it][A
+Path patching layers:  27%|██▋       | 13/48 [04:02<10:50, 18.60s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:20<10:32, 18.60s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:39<10:13, 18.58s/it][A
+Path patching layers:  33%|███▎      | 16/48 [04:57<09:54, 18.57s/it][A
+Path patching layers:  35%|███▌      | 17/48 [05:16<09:35, 18.56s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:34<09:16, 18.56s/it][A
+Path patching layers:  40%|███▉      | 19/48 [05:53<08:58, 18.56s/it][A
+Path patching layers:  42%|████▏     | 20/48 [06:12<08:39, 18.56s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:30<08:21, 18.56s/it][A
+Path patching layers:  46%|████▌     | 22/48 [06:49<08:02, 18.56s/it][A
+Path patching layers:  48%|████▊     | 23/48 [07:07<07:44, 18.59s/it][A
+Path patching layers:  50%|█████     | 24/48 [07:26<07:26, 18.59s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:45<07:07, 18.58s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [08:03<06:48, 18.57s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [08:22<06:29, 18.57s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:40<06:11, 18.56s/it][A
+Path patching layers:  60%|██████    | 29/48 [08:59<05:52, 18.56s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [09:17<05:33, 18.55s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [09:36<05:15, 18.56s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [09:54<04:56, 18.55s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [10:13<04:38, 18.56s/it][A
+Path patching layers:  71%|███████   | 34/48 [10:31<04:19, 18.55s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [10:50<04:01, 18.55s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [11:09<03:42, 18.56s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [11:27<03:24, 18.56s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [11:46<03:05, 18.57s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [12:04<02:47, 18.56s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [12:23<02:28, 18.56s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [12:41<02:09, 18.55s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [13:00<01:51, 18.55s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [13:18<01:32, 18.55s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [13:37<01:14, 18.55s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [13:56<00:55, 18.55s/it][A
+Path patching layers:  96%|█████████▌| 46/48 [14:14<00:37, 18.55s/it][A
+Path patching layers:  98%|█████████▊| 47/48 [14:33<00:18, 18.55s/it][A
+Path patching layers: 100%|██████████| 48/48 [14:51<00:00, 18.54s/it][APath patching layers: 100%|██████████| 48/48 [14:51<00:00, 18.58s/it]
+Batches:  16%|█▋        | 13/79 [3:04:26<15:52:07, 865.57s/it]Default logit diff: tensor([0.1992], device='cuda:0', dtype=torch.bfloat16)
+Xc logits (top 10):
+torch.return_types.topk(
+values=tensor([19.3750, 17.7500, 17.2500, 17.0000, 16.8750, 16.1250, 15.9375, 15.8750,
+        15.6875, 15.6250], device='cuda:0', dtype=torch.bfloat16),
+indices=tensor([ 1406,   220,  2303, 71928,  4710,  8908, 36556,   715, 17587, 18611],
+       device='cuda:0'))
+
+Path patching layers:   0%|          | 0/48 [00:00<?, ?it/s][A
+Path patching layers:   2%|▏         | 1/48 [00:19<15:04, 19.24s/it][A
+Path patching layers:   4%|▍         | 2/48 [00:38<14:44, 19.22s/it][A
+Path patching layers:   6%|▋         | 3/48 [00:57<14:24, 19.20s/it][A
+Path patching layers:   8%|▊         | 4/48 [01:16<14:04, 19.20s/it][A
+Path patching layers:  10%|█         | 5/48 [01:36<13:45, 19.20s/it][A
+Path patching layers:  12%|█▎        | 6/48 [01:55<13:26, 19.20s/it][A
+Path patching layers:  15%|█▍        | 7/48 [02:14<13:06, 19.19s/it][A
+Path patching layers:  17%|█▋        | 8/48 [02:33<12:47, 19.19s/it][A
+Path patching layers:  19%|█▉        | 9/48 [02:52<12:28, 19.19s/it][A
+Path patching layers:  21%|██        | 10/48 [03:11<12:09, 19.19s/it][A
+Path patching layers:  23%|██▎       | 11/48 [03:31<11:50, 19.20s/it][A
+Path patching layers:  25%|██▌       | 12/48 [03:50<11:30, 19.19s/it][A
+Path patching layers:  27%|██▋       | 13/48 [04:09<11:11, 19.19s/it][A
+Path patching layers:  29%|██▉       | 14/48 [04:28<10:52, 19.20s/it][A
+Path patching layers:  31%|███▏      | 15/48 [04:47<10:33, 19.20s/it][A
+Path patching layers:  33%|███▎      | 16/48 [05:07<10:14, 19.19s/it][A
+Path patching layers:  35%|███▌      | 17/48 [05:26<09:54, 19.19s/it][A
+Path patching layers:  38%|███▊      | 18/48 [05:45<09:35, 19.18s/it][A
+Path patching layers:  40%|███▉      | 19/48 [06:04<09:16, 19.18s/it][A
+Path patching layers:  42%|████▏     | 20/48 [06:23<08:56, 19.17s/it][A
+Path patching layers:  44%|████▍     | 21/48 [06:42<08:37, 19.17s/it][A
+Path patching layers:  46%|████▌     | 22/48 [07:02<08:18, 19.17s/it][A
+Path patching layers:  48%|████▊     | 23/48 [07:21<07:59, 19.17s/it][A
+Path patching layers:  50%|█████     | 24/48 [07:40<07:40, 19.17s/it][A
+Path patching layers:  52%|█████▏    | 25/48 [07:59<07:20, 19.17s/it][A
+Path patching layers:  54%|█████▍    | 26/48 [08:18<07:01, 19.18s/it][A
+Path patching layers:  56%|█████▋    | 27/48 [08:38<06:42, 19.17s/it][A
+Path patching layers:  58%|█████▊    | 28/48 [08:57<06:23, 19.17s/it][A
+Path patching layers:  60%|██████    | 29/48 [09:16<06:04, 19.17s/it][A
+Path patching layers:  62%|██████▎   | 30/48 [09:35<05:44, 19.16s/it][A
+Path patching layers:  65%|██████▍   | 31/48 [09:54<05:25, 19.15s/it][A
+Path patching layers:  67%|██████▋   | 32/48 [10:13<05:06, 19.14s/it][A
+Path patching layers:  69%|██████▉   | 33/48 [10:32<04:47, 19.15s/it][A
+Path patching layers:  71%|███████   | 34/48 [10:52<04:27, 19.14s/it][A
+Path patching layers:  73%|███████▎  | 35/48 [11:11<04:08, 19.14s/it][A
+Path patching layers:  75%|███████▌  | 36/48 [11:30<03:49, 19.13s/it][A
+Path patching layers:  77%|███████▋  | 37/48 [11:49<03:30, 19.13s/it][A
+Path patching layers:  79%|███████▉  | 38/48 [12:08<03:11, 19.14s/it][A
+Path patching layers:  81%|████████▏ | 39/48 [12:27<02:52, 19.15s/it][A
+Path patching layers:  83%|████████▎ | 40/48 [12:46<02:33, 19.14s/it][A
+Path patching layers:  85%|████████▌ | 41/48 [13:06<02:14, 19.15s/it][A
+Path patching layers:  88%|████████▊ | 42/48 [13:25<01:54, 19.15s/it][A
+Path patching layers:  90%|████████▉ | 43/48 [13:44<01:35, 19.14s/it][A
+Path patching layers:  92%|█████████▏| 44/48 [14:03<01:16, 19.14s/it][A
+Path patching layers:  94%|█████████▍| 45/48 [14:22<00:57, 19.14s/it][A
