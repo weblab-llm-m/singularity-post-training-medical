@@ -34,6 +34,7 @@ MODEL_PATH=${MODEL_PATH:-${LOCAL_MODEL_PATH}}
 DATASET_JSONL=${DATASET_JSONL:-$HOME/downloads/datasets/igakuqa.jsonl}
 SFT_DATASET_JSONL=${SFT_DATASET_JSONL:-$HOME/downloads/datasets/sft_igakuqa.jsonl}
 
+
 # 学習パラメータ
 DTYPE=${DTYPE:-bfloat16}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-4096}          # max_length / vLLM max_model_len に利用
@@ -209,6 +210,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --sequence_parallel true \
           --remove_unused_columns false \
           --load_safetensors true \
+          --save_safetensors true \
           --offload_model false \
           --offload_optimizer false \
           --use_distributed_optimizer \
@@ -221,8 +223,6 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --moe_shared_expert_overlap true \
           --moe_aux_loss_coeff 1e-3 \
           --finetune \
-          --no_save_optim false \
-          --no_save_rng false \
           --global_batch_size 512 \
           --micro_batch_size 1 \
           --steps_per_generation 5 \
@@ -237,10 +237,14 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --temperature 0.9 \
           --num_workers 8 \
           --dataset_num_proc 8 \
+          --no_save_optim \
+          --no_save_rng \
           --log_completions false \
           --attention_backend flash \
           --padding_free false \
           --save '${OUTPUT_DIR}' \
+          --no_save_optim \
+          --no_save_rng \
           --split_dataset_ratio 0.05 \
           --wandb_project 'Ramen_GRPO_GSPO_TRY' \
           --wandb_exp_name 'chord_grpo_reward_chinese_1.0_5epochs'
