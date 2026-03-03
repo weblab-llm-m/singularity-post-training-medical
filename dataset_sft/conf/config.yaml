@@ -46,6 +46,7 @@ max_completion_tokens: 4096
 temperature: 0.3
 top_p: 0.95
 num_workers: 30  # 同時リクエスト数
+max_retries_per_item: 3
 
 # ===========================================
 # 出力設定
