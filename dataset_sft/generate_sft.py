@@ -1,17 +1,7 @@
 """
-vLLMサーバーに対して2ステップパイプラインでSFTデータを生成する。
-
-SDG-Nexus YAML (medical_qa_synthesis.yaml) と同等のフロー:
-  Step 1: MCQ → 自然な質問に変換  (temp=0.0, JSON出力)
-  Step 2: 自然な質問 → 構造化医療回答  (temp=0.3)
-
-auto_eval_simple の predict_provider/vllm_pred.py を参考にした構造。
-
-使い方:
-  python generate_sft.py
-  python generate_sft.py +shard_index=0 +num_shards=8
+MCQ形式のSFTデータを生成する。
+GRPO評価と同じ出力形式（[ans]x[/ans]）で、system prompt付きmessagesを出力。
 """
-
 import os
 import json
 import re
@@ -28,35 +18,72 @@ from omegaconf import DictConfig
 # SDG-Nexus YAML準拠: システムプロンプト定義
 # ============================================================
 
-# Block 2: 質問生成（YAML generate_question と同一）
-QUESTION_GEN_SYSTEM = """あなたは医学領域のデータ合成者です。
-医学の選択式問題を、ユーザーが日常的にしそうな自然な質問に変換してください。
+SYSTEM_PROMPT = (
+    "あなたは医師国家試験を受験している医学生です。"
+    "与えられた問題に対して、まず日本語で考察を行い、"
+    "最後に正解の選択肢を [ans][/ans] タグで囲んで回答してください。"
+)
 
-【ルール】
-- 選択肢の列挙形式（A/B/C/D等）は使わない
-- 正答を質問文に含めない
-- 医学的テーマは保持する
-- 入力と同じ言語で出力する
+def build_prompt(problem_text: str, choices_text: str) -> str:
+    """GRPO用データと同じプロンプト"""
+    return f"""次の多肢選択問題について、日本語で考察したあと、
+最後の1行で正しい選択肢を [ans][/ans] で囲んで答えてください。
 
-【出力形式】
-{"generated_question": "変換後の質問"}"""
+問題:
+{problem_text}
 
-# Block 4: 回答生成（YAML generate_answer と同一）
-ANSWER_GEN_SYSTEM = """あなたは医療情報を提供するアシスタントです。
+選択肢:
+{choices_text}
 
-【基本方針】
-- 医師ではない。診断確定や個別治療指示はしない
-- 安全最優先。緊急性が高い場合は受診を促す
-- 不確実な点は明示する
+出力フォーマット例:
 
-【回答構造】
-1) 要点（3行以内）
-2) 考えられる原因（3〜5つ）
-3) 自分でできる対応
-4) 受診の目安
-5) 追加確認質問（最大3つ）
+ここに日本語で考察を書く。
 
-最後に「医療機関での相談が必要な場合があります」と添える。"""
+[ans]a,c[/ans]
+"""
+
+# ============ [ans]タグ抽出 ============
+
+def extract_ans_tag(text: str) -> str | None:
+    m = re.search(r"\[ans\](.*?)\[/ans\]", text, re.DOTALL)
+    return m.group(1).strip().lower() if m else None
+
+# ============ 新しい生成関数（1ステップ） ============
+
+async def generate_mcq_answer(client, item, model_name, cfg):
+    prompt = build_prompt(item["problem_text"], item["choices_text"])
+    try:
+        resp = await client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=cfg.get("temperature", 0.3),
+            top_p=cfg.get("top_p", 0.95),
+            max_completion_tokens=cfg.get("max_completion_tokens", 4096),
+            stream=False,
+        )
+        content = resp.choices[0].message.content
+        if content is None or resp.choices[0].finish_reason == "length":
+            return None, None
+        usage = json.loads(resp.usage.model_dump_json())
+        return content, usage
+    except Exception as e:
+        print(f"Generate Error [{item.get('problem_id')}]: {e}")
+        return None, None
+
+# ============ 新しい品質検証 ============
+
+def validate_answer(answer_text: str, gold_answer: str) -> tuple[bool, str | None]:
+    if not answer_text or len(answer_text) < 20:
+        return False, None
+    extracted = extract_ans_tag(answer_text)
+    if extracted is None:
+        return False, None
+    gold_norm = ",".join(sorted(gold_answer.strip().lower().split(",")))
+    pred_norm = ",".join(sorted(extracted.split(",")))
+    return (pred_norm == gold_norm), extracted
 
 
 # ============================================================
@@ -101,153 +128,39 @@ def append_jsonl(path: str, record: dict):
 
 
 # ============================================================
-# Block 1: MCQフォーマット（YAML format_mcq と同一）
-# ============================================================
-
-def format_mcq_text(item: dict) -> str:
-    lines = [
-        "【Problem】",
-        item["problem_text"].strip(),
-        "",
-        "【Choices】",
-    ]
-    for choice_line in item["choices_text"].strip().split("\n"):
-        lines.append(choice_line.strip())
-    lines.extend(["", "【Answer】", item["answer"].strip()])
-    return "\n".join(lines)
-
-
-# ============================================================
-# Block 2+3: Step 1 — MCQ → 自然な質問（temp=0.0）
-# ============================================================
-
-async def step1_generate_question(
-    client: AsyncOpenAI,
-    item: dict,
-    model_name: str,
-) -> str | None:
-    mcq_text = format_mcq_text(item)
-
-    try:
-        resp = await client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": QUESTION_GEN_SYSTEM},
-                {"role": "user", "content": f"MCQ:\n{mcq_text}"},
-            ],
-            temperature=0.0,
-            max_completion_tokens=2048,
-            stream=False,
-        )
-        raw = resp.choices[0].message.content
-        if raw is None:
-            return None
-
-        # JSON抽出（YAML extract_question と同一ロジック）
-        try:
-            parsed = json.loads(raw)
-            return parsed.get("generated_question", raw)
-        except json.JSONDecodeError:
-            m = re.search(r'\{[^}]*"generated_question"\s*:\s*"([^"]+)"', raw)
-            if m:
-                return m.group(1)
-            return raw.strip()
-
-    except Exception as e:
-        print(f"Step1 Error [{item.get('problem_id')}]: {e}")
-        return None
-
-
-# ============================================================
-# Block 4: Step 2 — 自然な質問 → 構造化医療回答（temp=0.3）
-# ============================================================
-
-async def step2_generate_answer(
-    client: AsyncOpenAI,
-    question: str,
-    model_name: str,
-    cfg: DictConfig,
-) -> tuple[str | None, dict | None]:
-    try:
-        resp = await client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": ANSWER_GEN_SYSTEM},
-                {"role": "user", "content": question},
-            ],
-            temperature=cfg.get("temperature", 0.3),
-            top_p=cfg.get("top_p", 0.95),
-            max_completion_tokens=cfg.get("max_completion_tokens", 4096),
-            stream=False,
-        )
-        content = resp.choices[0].message.content
-        if content is None or resp.choices[0].finish_reason == "length":
-            return None, None
-
-        usage = json.loads(resp.usage.model_dump_json())
-        return content, usage
-
-    except Exception as e:
-        print(f"Step2 Error: {e}")
-        return None, None
-
-
-# ============================================================
-# 品質検証
-# ============================================================
-
-def validate_answer(answer_text: str) -> bool:
-    """回答構造の最低品質チェック"""
-    if not answer_text or len(answer_text) < 100:
-        return False
-    markers = ["要点", "原因", "対応", "受診", "医療機関"]
-    found = sum(1 for m in markers if m in answer_text)
-    return found >= 2
-
-
-# ============================================================
 # 2ステップ統合
 # ============================================================
 
-async def process_one(
-    client: AsyncOpenAI,
-    item: dict,
-    cfg: DictConfig,
-) -> dict | None:
+async def process_one(client, item, cfg):
     model = cfg.model_name
+    max_retries = cfg.get("max_retries_per_item", 3)
+    prompt = build_prompt(item["problem_text"], item["choices_text"])
 
-    # Step 1
-    question = await step1_generate_question(client, item, model)
-    if question is None:
-        return None
+    for attempt in range(max_retries):
+        answer_text, usage = await generate_mcq_answer(client, item, model, cfg)
+        if answer_text is None:
+            continue
 
-    # Step 2
-    answer, usage = await step2_generate_answer(client, question, model, cfg)
-    if answer is None:
-        return None
+        is_correct, extracted = validate_answer(answer_text, item["answer"])
+        if is_correct:
+            return {
+                "problem_id": item["problem_id"],
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},  # ← 追加
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": answer_text},
+                ],
+                "solution": item["answer"],
+                "extracted_answer": extracted,
+                "gold_answer": item["answer"],
+                "year": item.get("year"),
+                "category": item.get("category", ""),
+                "usage": usage,
+                "attempts": attempt + 1,
+            }
 
-    # 品質検証
-    if not validate_answer(answer):
-        print(f"  品質不足で除外: {item.get('problem_id')}")
-        return None
-
-    # Block 5: 最終出力（YAML final と同一フィールド）
-    return {
-        "problem_id": item["problem_id"],
-        "original_mcq": format_mcq_text(item),
-        "question": question,
-        "answer": answer,
-        "gold_answer": item["answer"],
-        "reasoning_effort": "high",
-        "messages": [
-            {"role": "user", "content": question},
-            {"role": "assistant", "content": answer},
-        ],
-        "year": item.get("year"),
-        "category": item.get("category", ""),
-        "usage": usage,
-    }
-
+    print(f"  除外（{max_retries}回不正解）: {item.get('problem_id')}")
+    return None
 
 async def generate_all(
     client: AsyncOpenAI,
@@ -305,8 +218,6 @@ def main(cfg: DictConfig):
 
     print("=== SFT DataGen (2-Step Pipeline) ===")
     print(f"  Model: {cfg.model_name}")
-    print(f"  Step1: MCQ → 自然質問 (temp=0.0)")
-    print(f"  Step2: 質問 → 構造化回答 (temp={cfg.get('temperature', 0.3)})")
     print(f"  Input: {cfg.input_path}")
     print(f"  Output: {output_path}")
     print(f"  Shard: {shard_index}/{num_shards}")
