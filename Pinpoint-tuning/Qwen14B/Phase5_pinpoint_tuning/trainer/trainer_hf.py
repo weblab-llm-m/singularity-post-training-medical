@@ -192,7 +192,12 @@ class HuggingfaceTrainer(Trainer):
         # Update latest_previous_output_dir (which may be save due to training time interval)
         if hasattr(self.control, "latest") and self.control.latest:
             if self.latest_previous_output_dir is not None:
-                if torch.distributed.get_rank() == 0:
+                if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
+                    logger.info(
+                        f" ! Remove the previous latest checkpoint {self.latest_previous_output_dir}"
+                    )
+                    shutil.rmtree(self.latest_previous_output_dir)
+                elif not torch.distributed.is_initialized():
                     logger.info(
                         f" ! Remove the previous latest checkpoint {self.latest_previous_output_dir}"
                     )
@@ -201,7 +206,8 @@ class HuggingfaceTrainer(Trainer):
                 self.args.output_dir, checkpoint_folder)
 
         self.control.last_time = time.time()
-        torch.distributed.barrier()
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
 
     def _save(self, output_dir: Optional[str] = None, state_dict: Any = None) -> None:
         """Save model to output_dir.

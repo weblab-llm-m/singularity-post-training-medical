@@ -10,7 +10,6 @@ import json
 import re
 from typing import List, Dict, Tuple, Set
 import pandas as pd
-import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
@@ -133,8 +132,8 @@ def evaluate_model(
             if 'reward_model' in row and isinstance(row['reward_model'], dict):
                 ground_truth = row['reward_model'].get('ground_truth', [])
 
-                # Parse ground truth - could be a list, tuple, ndarray, string representation of list, or single value
-                if isinstance(ground_truth, (list, tuple, np.ndarray)):
+                # Parse ground truth - could be a list, string representation of list, or single value
+                if isinstance(ground_truth, (list, tuple)):
                     gt_answers = set(str(x).strip().lower() for x in ground_truth)
                 elif isinstance(ground_truth, str):
                     # Check if it's a string representation of a list like "['a', 'b']"
@@ -165,17 +164,13 @@ def evaluate_model(
                 return_tensors="pt"
             ).to(model.device)
 
-            # Generate (using Qwen3 recommended settings for thinking mode)
-            # Reference: https://huggingface.co/Qwen/Qwen3-14B README.md
-            # Thinking mode: Temperature=0.6, TopP=0.95, TopK=20, MaxNewTokens=32768
-            # DO NOT use greedy decoding (do_sample=False)
+            # Generate (reduced max_new_tokens for memory efficiency)
             outputs = model.generate(
                 input_ids,
-                max_new_tokens=32768,  # Qwen3 recommended for most queries
-                do_sample=True,  # Must use sampling (NOT greedy decoding)
-                temperature=0.6,  # Qwen3 recommended for thinking mode
-                top_p=0.95,  # Qwen3 recommended for thinking mode
-                top_k=20,  # Qwen3 recommended for thinking mode
+                max_new_tokens=128,  # Reduced from 512
+                do_sample=False,
+                temperature=None,
+                top_p=None,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id
             )

@@ -165,17 +165,13 @@ def evaluate_model(
                 return_tensors="pt"
             ).to(model.device)
 
-            # Generate (using Qwen3 recommended settings for thinking mode)
-            # Reference: https://huggingface.co/Qwen/Qwen3-14B README.md
-            # Thinking mode: Temperature=0.6, TopP=0.95, TopK=20, MaxNewTokens=32768
-            # DO NOT use greedy decoding (do_sample=False)
+            # Generate (increased max_new_tokens to allow full answer generation)
             outputs = model.generate(
                 input_ids,
-                max_new_tokens=32768,  # Qwen3 recommended for most queries
-                do_sample=True,  # Must use sampling (NOT greedy decoding)
-                temperature=0.6,  # Qwen3 recommended for thinking mode
-                top_p=0.95,  # Qwen3 recommended for thinking mode
-                top_k=20,  # Qwen3 recommended for thinking mode
+                max_new_tokens=512,  # Increased to allow complete answer
+                do_sample=False,
+                temperature=None,
+                top_p=None,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id
             )
