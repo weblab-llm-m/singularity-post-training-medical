@@ -9,10 +9,12 @@ Head分類:
 - Reasoning Flow Heads: reasoning_keywords (推論キーワード)
 """
 
+import ast
 import json
+import os
 import argparse
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 
 
 # カテゴリのグルーピング定義
@@ -31,6 +33,78 @@ PROFILE_CATEGORIES = {
 REASONING_CATEGORIES = {
     'reasoning_keywords'  # (7) 推論キーワード
 }
+
+
+def clean_choice(raw):
+    """文字列形式のリスト（例: "['a', 'b']"）を実際のリストに変換"""
+    if isinstance(raw, str) and raw.strip().startswith('['):
+        try:
+            parsed = ast.literal_eval(raw)
+            return [item.replace('\u3000', '') for item in parsed]
+        except Exception:
+            return raw
+    return raw
+
+
+def format_choices_text(choices) -> str:
+    """選択肢リストを 'a. xxx\nb. yyy\n...' 形式に変換"""
+    processed = clean_choice(choices)
+    if isinstance(processed, list):
+        return '\n'.join([f"{chr(97+i)}. {c}" for i, c in enumerate(processed)])
+    return str(processed)
+
+
+def load_igakuqa_choices(igakuqa_path: str) -> Dict[str, Dict]:
+    """
+    igakuQAデータセットから problem_id → {choices, answer} のマッピングを構築
+
+    Args:
+        igakuqa_path: HuggingFaceデータセット名 or ローカルjsonlパス
+
+    Returns:
+        {problem_id: {"choices": [...], "answer": ["a", ...]}}
+    """
+    mapping = {}
+
+    if os.path.isfile(igakuqa_path):
+        # ローカルjsonlファイルから読み込み（tools/dataset.py形式）
+        with open(igakuqa_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                item = json.loads(line)
+                pid = item.get('problem_id', '')
+                if not pid:
+                    continue
+                # igakuqa.jsonlはmessages形式なので、choicesはない
+                # HuggingFaceから直接読む場合のフォールバック
+                mapping[pid] = {
+                    "choices": item.get('choices', []),
+                    "answer": item.get('answer', []),
+                    "solution": item.get('solution', ''),
+                }
+    else:
+        # HuggingFaceデータセットとして読み込み
+        try:
+            from datasets import load_dataset
+            from dotenv import load_dotenv
+            load_dotenv(os.path.expandvars(
+                '$HOME/singularity-post-training-medical/.env'))
+            token = os.environ.get('HF_TOKEN')
+            ds = load_dataset(igakuqa_path, split='train', token=token)
+            for ex in ds:
+                pid = ex.get('problem_id', '')
+                if not pid:
+                    continue
+                choices = clean_choice(ex.get('choices', []))
+                answer = clean_choice(ex.get('answer', []))
+                mapping[pid] = {
+                    "choices": choices if isinstance(choices, list) else [],
+                    "answer": answer if isinstance(answer, list) else [answer],
+                }
+            print(f"  Loaded {len(mapping)} problems from HuggingFace: {igakuqa_path}")
+        except Exception as e:
+            print(f"  Warning: Failed to load igakuQA dataset: {e}")
+
+    return mapping
 
 
 def extract_positions_by_group(medical_terms: List[Dict]) -> Dict[str, List[int]]:
@@ -74,7 +148,8 @@ def extract_positions_by_group(medical_terms: List[Dict]) -> Dict[str, List[int]
 def generate_path_patching_data(
     annotation_path: str,
     counterfactual_path: str,
-    output_path: str
+    output_path: str,
+    igakuqa_source: Optional[str] = None
 ):
     """
     Path Patchingデータを生成
@@ -83,6 +158,7 @@ def generate_path_patching_data(
         annotation_path: アノテーションデータのパス
         counterfactual_path: Counterfactualデータのパス
         output_path: 出力パス
+        igakuqa_source: igakuQAデータソース（HuggingFaceデータセット名 or ローカルパス）
     """
     print("="*60)
     print("Path Patching Data Builder for igakuQA")
@@ -90,6 +166,13 @@ def generate_path_patching_data(
 
     print(f"Annotation data: {annotation_path}")
     print(f"Counterfactual data: {counterfactual_path}")
+
+    # igakuQAの選択肢・正解データを読み込み
+    igakuqa_map = {}
+    if igakuqa_source:
+        print(f"igakuQA source: {igakuqa_source}")
+        igakuqa_map = load_igakuqa_choices(igakuqa_source)
+        print(f"  Loaded choices/answers for {len(igakuqa_map)} problems")
 
     # アノテーションデータを読み込み
     annotations = []
@@ -111,6 +194,7 @@ def generate_path_patching_data(
     # Path Patchingデータを構築
     path_patching_data = []
     skipped_no_cf = 0
+    matched_choices = 0
 
     for i, annot in enumerate(annotations):
         annot_idx = annot['index']
@@ -135,21 +219,44 @@ def generate_path_patching_data(
             for term in annot.get('medical_terms', [])
         }
 
+        # igakuQAから選択肢と正解を取得
+        problem_id = annot.get('problem_id', '')
+        qa_info = igakuqa_map.get(problem_id, {})
+        choices = qa_info.get('choices', [])
+        answer_list = qa_info.get('answer', [])
+
+        # reference_data / counterfactual_data に選択肢を追加
+        ref_text = annot.get('problem_text', '')
+        cf_text = cf.get('counterfactual_text', '')
+        if choices:
+            matched_choices += 1
+            choices_text = format_choices_text(choices)
+            ref_text = f"{ref_text}\n{choices_text}"
+            cf_text = f"{cf_text}\n{choices_text}"
+
+        # predict_token: 正解があれば使用、なければ"a"
+        if answer_list:
+            predict_token = answer_list[0]  # 複数回答の場合は先頭を使用
+        else:
+            predict_token = "a"
+
+        # record_tokens: 選択肢の数に合わせる
+        num_choices = len(choices) if choices else 5
+        record_tokens = [chr(97 + j) for j in range(num_choices)]
+
         # Path Patchingアイテムを構築
         path_item = {
             # 基本情報
             "id": annot_idx,
-            "problem_id": annot.get('problem_id', ''),
+            "problem_id": problem_id,
 
             # Path Patching用データ（Phase2で必須）
-            "reference_data": annot.get('problem_text', ''),
-            "counterfactual_data": cf.get('counterfactual_text', ''),
+            "reference_data": ref_text,
+            "counterfactual_data": cf_text,
 
             # 予測トークン情報（Phase2のPath Patchingで必須）
-            # igakuQAは5択問題なので、ダミーとして"a"を使用
-            # 実際のPath Patchingでは注意パターンの抽出が目的
-            "predict_token": "a",
-            "record_tokens": ["a", "b", "c", "d", "e"],
+            "predict_token": predict_token,
+            "record_tokens": record_tokens,
 
             # 3グループ別のトークン位置（Phase3のHead分類で使用）
             "medical_term_positions": positions['medical_term_positions'],
@@ -178,6 +285,9 @@ def generate_path_patching_data(
 
         if (i + 1) % 1000 == 0:
             print(f"  Processed {i + 1}/{len(annotations)} samples...")
+
+    if igakuqa_source:
+        print(f"\n  Choices matched: {matched_choices}/{len(path_patching_data)}")
 
     # 保存
     print(f"\nSaving to: {output_path}")
@@ -267,6 +377,9 @@ if __name__ == "__main__":
                         help="Counterfactual data path (.jsonl)")
     parser.add_argument("--output_path", type=str, default=None,
                         help="Output path (.jsonl)")
+    parser.add_argument("--igakuqa_source", type=str,
+                        default="weblab-LLM-M/igakuqa-2001-2024-filtered",
+                        help="igakuQA dataset (HuggingFace name or local jsonl path)")
 
     args = parser.parse_args()
 
@@ -280,7 +393,8 @@ if __name__ == "__main__":
     generate_path_patching_data(
         annotation_path=annotation_path,
         counterfactual_path=counterfactual_path,
-        output_path=output_path
+        output_path=output_path,
+        igakuqa_source=args.igakuqa_source
     )
 
     print("\n" + "="*60)

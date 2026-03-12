@@ -5,6 +5,7 @@ Medical Term Annotator for igakuQA
 """
 
 import json
+import re
 import argparse
 import os
 from pathlib import Path
@@ -24,6 +25,30 @@ from utils_common.tokenizer_utils import (
     initialize_qwen3_tokenizer,
     find_token_positions
 )
+
+
+def get_required_answer_count(problem_text: str):
+    """
+    問題文中の「2つ選べ」「２つ選べ」「二つ選べ」などから
+    必要な解答数を推定する。見つからなければ None を返す。
+    """
+    text = problem_text
+    z2h = str.maketrans("０１２３４５６７８９", "0123456789")
+    text_norm = text.translate(z2h)
+
+    m = re.search(r'([0-9]+)\s*つ\s*選', text_norm)
+    if m:
+        try:
+            return int(m.group(1))
+        except ValueError:
+            pass
+
+    kanji_map = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5}
+    m2 = re.search(r'([一二三四五])\s*つ\s*選', text)
+    if m2:
+        return kanji_map.get(m2.group(1))
+
+    return None
 
 
 def annotate_igakuqa_data(
@@ -79,6 +104,11 @@ def annotate_igakuqa_data(
 
         problem_text = row.get("problem_text", "")
         if not problem_text:
+            continue
+
+        # 解答数ミスマッチを除外（dataset.pyと同一フィルタ）
+        required = get_required_answer_count(problem_text)
+        if required is not None and len(row["answer"]) != required:
             continue
 
         processed_count += 1

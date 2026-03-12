@@ -1,0 +1,163 @@
+{
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "num_layers": 48,
+  "num_heads": 32,
+  "total_heads": 1536,
+  "num_samples": 256,
+  "impact_stats": {
+    "medical_term_heads": {
+      "label": "Medical Term",
+      "count": 143,
+      "percentage": "9.3%",
+      "mean_impact": -0.003937824629247189,
+      "std_impact": 0.022105509415268898,
+      "median_impact": 0.0002384185791015625,
+      "min_impact": -0.0760197639465332,
+      "max_impact": 0.06487369537353516
+    },
+    "profile_indicator_heads": {
+      "label": "Profile Indicator",
+      "count": 205,
+      "percentage": "13.3%",
+      "mean_impact": -0.008610225282609463,
+      "std_impact": 0.021513070911169052,
+      "median_impact": -0.0080108642578125,
+      "min_impact": -0.07245540618896484,
+      "max_impact": 0.039839744567871094
+    },
+    "reasoning_flow_heads": {
+      "label": "Reasoning Flow",
+      "count": 469,
+      "percentage": "30.5%",
+      "mean_impact": -0.008632989600300789,
+      "std_impact": 0.026192104443907738,
+      "median_impact": -0.007927417755126953,
+      "min_impact": -0.1139521598815918,
+      "max_impact": 0.058329105377197266
+    },
+    "unclassified": {
+      "label": "Unclassified",
+      "count": 719,
+      "percentage": "46.8%",
+      "mean_impact": -0.007548650726675987,
+      "std_impact": 0.02577340416610241,
+      "median_impact": -0.007331371307373047,
+      "min_impact": -0.12079477310180664,
+      "max_impact": 0.08282661437988281
+    }
+  },
+  "layer_group_analysis": {
+    "early": {
+      "layers": "0-15",
+      "medical_term_heads": 39,
+      "profile_indicator_heads": 65,
+      "reasoning_flow_heads": 158
+    },
+    "middle": {
+      "layers": "16-31",
+      "medical_term_heads": 29,
+      "profile_indicator_heads": 64,
+      "reasoning_flow_heads": 182
+    },
+    "late": {
+      "layers": "32-47",
+      "medical_term_heads": 75,
+      "profile_indicator_heads": 76,
+      "reasoning_flow_heads": 129
+    }
+  },
+  "top_negative_heads": [
+    {
+      "layer": 47,
+      "head": 28,
+      "impact": -0.1139521598815918,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 0,
+      "head": 6,
+      "impact": -0.09287595748901367,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 1,
+      "head": 27,
+      "impact": -0.09027719497680664,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 0,
+      "head": 11,
+      "impact": -0.08721351623535156,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 1,
+      "head": 18,
+      "impact": -0.0787973403930664,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 47,
+      "head": 26,
+      "impact": -0.07666349411010742,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 4,
+      "head": 26,
+      "impact": -0.0760197639465332,
+      "type": "Medical Term"
+    },
+    {
+      "layer": 23,
+      "head": 15,
+      "impact": -0.07265806198120117,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 8,
+      "head": 11,
+      "impact": -0.07245540618896484,
+      "type": "Profile Indicator"
+    },
+    {
+      "layer": 12,
+      "head": 14,
+      "impact": -0.07033348083496094,
+      "type": "Reasoning Flow"
+    }
+  ],
+  "top_positive_heads": [
+    {
+      "layer": 35,
+      "head": 26,
+      "impact": 0.06487369537353516,
+      "type": "Medical Term"
+    },
+    {
+      "layer": 11,
+      "head": 10,
+      "impact": 0.058329105377197266,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 21,
+      "head": 27,
+      "impact": 0.0545501708984375,
+      "type": "Reasoning Flow"
+    },
+    {
+      "layer": 14,
+      "head": 9,
+      "impact": 0.05161762237548828,
+      "type": "Medical Term"
+    },
+    {
+      "layer": 28,
+      "head": 29,
+      "impact": 0.0504612922668457,
+      "type": "Reasoning Flow"
+    }
+  ]
+}
