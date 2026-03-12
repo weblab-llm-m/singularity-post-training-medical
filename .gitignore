@@ -1,6 +1,8 @@
 .env
 *.out
 *.err
+.DS_Store
 */outputs/
+outputs/model_outputs/
 venv/
 *.pt

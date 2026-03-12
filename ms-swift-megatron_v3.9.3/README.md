@@ -62,6 +62,11 @@ cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/megat
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/qwen3_next.py $HOME/swift-RL/containers/ms-swift/swift/megatron/model/gpt/qwen3_next.py
 # resumeを行うためにassertを解除するだけ
 cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/checkpointing.py $HOME/swift-RL/containers/megatron-lm-core_r0.14.0/megatron/training/checkpointing.py
+# PinpointTuning追加
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/megatron_args.py $HOME/swift-RL/containers/ms-swift/swift/megatron/argument/megatron_args.py
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/torch_utils.py $HOME/swift-RL/containers/ms-swift/swift/utils/torch_utils.py
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/utils.py $HOME/swift-RL/containers/ms-swift/swift/megatron/utils/utils.py
+cp $HOME/singularity-post-training-medical/ms-swift-megatron_v3.9.3/plugin/__init__.py $HOME/swift-RL/containers/ms-swift/swift/utils/__init__.py
 ```
 
 起動時に **コンテナへ bind** し、**`MEGATRON_LM_PATH`** と **`PYTHONPATH`** に追加します。(実装済み)
