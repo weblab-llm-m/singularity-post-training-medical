@@ -1,0 +1,154 @@
+{
+  "timestamp": "2026-03-02T19:55:43.312545",
+  "model": "positive_pinpoint",
+  "data": "overlap_4393",
+  "total_processes": 128,
+  "succeeded": 128,
+  "failed_processes": [],
+  "total_samples": 4393,
+  "result_shape": [
+    48,
+    32
+  ],
+  "per_sample_shape": [
+    4393,
+    48,
+    32
+  ],
+  "top_negative_heads": [
+    {
+      "rank": 1,
+      "layer": 24,
+      "head": 7,
+      "impact": -2.219616651535034
+    },
+    {
+      "rank": 2,
+      "layer": 27,
+      "head": 29,
+      "impact": -1.3504350185394287
+    },
+    {
+      "rank": 3,
+      "layer": 3,
+      "head": 5,
+      "impact": -0.9952108860015869
+    },
+    {
+      "rank": 4,
+      "layer": 10,
+      "head": 12,
+      "impact": -0.8903184533119202
+    },
+    {
+      "rank": 5,
+      "layer": 37,
+      "head": 8,
+      "impact": -0.4223714768886566
+    },
+    {
+      "rank": 6,
+      "layer": 39,
+      "head": 6,
+      "impact": -0.38756975531578064
+    },
+    {
+      "rank": 7,
+      "layer": 5,
+      "head": 8,
+      "impact": -0.36047977209091187
+    },
+    {
+      "rank": 8,
+      "layer": 11,
+      "head": 26,
+      "impact": -0.356418639421463
+    },
+    {
+      "rank": 9,
+      "layer": 3,
+      "head": 3,
+      "impact": -0.3488861620426178
+    },
+    {
+      "rank": 10,
+      "layer": 38,
+      "head": 10,
+      "impact": -0.33883264660835266
+    },
+    {
+      "rank": 11,
+      "layer": 0,
+      "head": 31,
+      "impact": -0.2638787627220154
+    },
+    {
+      "rank": 12,
+      "layer": 5,
+      "head": 22,
+      "impact": -0.2510868012905121
+    },
+    {
+      "rank": 13,
+      "layer": 37,
+      "head": 31,
+      "impact": -0.23755846917629242
+    },
+    {
+      "rank": 14,
+      "layer": 21,
+      "head": 6,
+      "impact": -0.2070089429616928
+    },
+    {
+      "rank": 15,
+      "layer": 4,
+      "head": 21,
+      "impact": -0.17047050595283508
+    },
+    {
+      "rank": 16,
+      "layer": 5,
+      "head": 21,
+      "impact": -0.1598293036222458
+    },
+    {
+      "rank": 17,
+      "layer": 1,
+      "head": 10,
+      "impact": -0.1484552025794983
+    },
+    {
+      "rank": 18,
+      "layer": 0,
+      "head": 27,
+      "impact": -0.1461682915687561
+    },
+    {
+      "rank": 19,
+      "layer": 10,
+      "head": 23,
+      "impact": -0.13828012347221375
+    },
+    {
+      "rank": 20,
+      "layer": 1,
+      "head": 20,
+      "impact": -0.13743816316127777
+    }
+  ],
+  "global_stats": {
+    "mean": -0.005883495789021254,
+    "std": 0.25822898745536804,
+    "min": -2.219616651535034,
+    "max": 8.839157104492188
+  },
+  "per_sample_stats": {
+    "mean_std_across_heads": 5.203428745269775,
+    "max_std_head": {
+      "layer": 5,
+      "head": 24,
+      "std": 588.4208374023438
+    }
+  }
+}

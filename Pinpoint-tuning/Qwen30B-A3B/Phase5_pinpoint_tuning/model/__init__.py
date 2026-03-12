@@ -9,7 +9,6 @@ from argparse import Namespace
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 from model.model_hf import build_model_hf, build_tokenizer_hf
-from model.model_peft import build_model_peft
 
 
 def build_model(args: Namespace) -> PreTrainedModel:
@@ -29,6 +28,7 @@ def build_model(args: Namespace) -> PreTrainedModel:
 
     # Build PEFT models
     if args.peft_type is not None:
+        from model.model_peft import build_model_peft
         model = build_model_peft(args, model)
 
     # Enable gradient checkpointing

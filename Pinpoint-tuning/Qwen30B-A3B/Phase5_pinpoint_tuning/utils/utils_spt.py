@@ -334,10 +334,15 @@ def freeze_modules_moe(
 
                 freeze_kv_proj_hook(layer, all_groups[index])
 
-    # Log trainable parameter summary
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logging_rank(f"@@@ Freezing complete. Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    # Log trainable parameter summary (use ds_numel for ZeRO-3 compatibility)
+    def _numel(p):
+        return p.ds_numel if hasattr(p, 'ds_numel') else p.numel()
+    total_params = sum(_numel(p) for p in model.parameters())
+    trainable_params = sum(_numel(p) for p in model.parameters() if p.requires_grad)
+    if total_params > 0:
+        logging_rank(f"@@@ Freezing complete. Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    else:
+        logging_rank(f"@@@ Freezing complete. Trainable: {trainable_params:,} / {total_params:,} (param sizes unavailable under ZeRO-3)")
 
     return
 
