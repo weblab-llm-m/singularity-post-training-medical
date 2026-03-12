@@ -1,192 +1,76 @@
-# Medical Path Patching for Gynecology QA
+# Pinpoint Tuning — Qwen3-14B (Dense)
 
-産婦人科診療ガイドラインデータに対するPath Patching分析システム
+産婦人科診療ガイドラインデータに対する Path Patching 分析・Pinpoint Tuning システム。
+翻訳メカニズム論文（arXiv:2502.11806）の手法を Qwen3-14B（Dense, 40層×40ヘッド）に適用。
 
-## 概要
+## モデル仕様
 
-このプロジェクトは、翻訳メカニズム論文（arXiv:2502.11806）の手法を応用し、Qwen3-14Bモデルの注意ヘッドを機能的に分類します。
+| パラメータ | 値 |
+|-----------|-----|
+| モデル | Qwen3-14B |
+| アーキテクチャ | Dense Transformer |
+| レイヤー数 | 40 |
+| Attention Heads | 40 |
+| Hidden Size | 5120 |
 
-### 3種類のヘッド分類
+## 3種類のヘッド分類
 
-1. **Medical Term Heads**: 医療用語に注目するヘッド
-2. **Guideline Indicator Heads**: ガイドライン指示語にスパイク注意するヘッド
-3. **Reasoning Flow Heads**: 推論キーワードに均一注意するヘッド
+1. **Medical Term Heads** — 医療用語に注目するヘッド
+2. **Guideline Indicator Heads** — ガイドライン指示語にスパイク注意するヘッド
+3. **Reasoning Flow Heads** — 推論キーワードに均一注意するヘッド
 
 ## ディレクトリ構造
 
 ```
-medical_path_patching/
-├── Phase1_data_preparation/       # データ準備
-│   ├── medical_terms_dictionary.json
-│   ├── medical_term_annotator.py
-│   ├── counterfactual_generator.py
-│   └── path_patching_data_builder.py
-├── Phase2_path_patching/          # Path Patching実行（要実装）
-├── Phase3_attention_analysis/     # 注意パターン解析
-│   ├── attention_extractor.py
-│   ├── head_classifier.py
-│   └── medical_pattern_detector.py
-├── Phase4_visualization/          # 可視化
-│   ├── heatmap_generator.py
-│   ├── statistical_analyzer.py
-│   └── report_generator.py
-├── Phase5_pinpoint_tuning/        # Pinpoint Tuning
-│   └── select_trainable_heads.py
+Qwen14B/
+├── Phase1_data_preparation/       # データ準備・アノテーション
+├── Phase2_path_patching/          # Path Patching 実行
+├── Phase3_attention_analysis/     # 注意パターン解析・ヘッド分類
+├── Phase4_visualization/          # ヒートマップ・統計レポート
+├── Phase5_pinpoint_tuning/        # Pinpoint Tuning（LoRA fine-tuning）
+│   └── experiments/               # 実験バリアント（v1〜v5）
 ├── configs/                       # 設定ファイル
-│   ├── medical_config.yaml
-│   └── head_classification_params.yaml
-├── utils_common/                  # 共通ユーティリティ
-│   ├── tokenizer_utils.py
-│   ├── medical_nlp_utils.py
-│   └── visualization_helpers.py
+├── utils_common/                  # Qwen14B固有ユーティリティ（クラスAPI）
 └── scripts/                       # 実行スクリプト
-    ├── run_phase1.sh
-    ├── run_phase3.sh
-    └── run_full_pipeline.sh
 ```
 
-## 実装済みファイル一覧
+## 共通コード（shared/）
 
-### Phase 1: データ準備 ✅
-- [x] medical_terms_dictionary.json
-- [x] medical_term_annotator.py
-- [x] counterfactual_generator.py
-- [x] path_patching_data_builder.py
+Phase2/3/5 の一部モジュールはモデル間で共通化され、`../shared/` に配置されている。
+各ファイルは re-export ラッパーとして残されており、既存の import パスは維持される。
 
-### Phase 2: Path Patching ⚠️
-- [x] attention_extractor.py（Phase 3に配置）
-- [ ] path_patching_medical.py（要実装 - sycophancy-interpretabilityから改変）
-- [ ] utils.py（要実装 - sycophancy-interpretabilityから改変）
+| ローカルファイル | 共通モジュール |
+|----------------|---------------|
+| `Phase2_path_patching/dataset.py` | `shared/phase2/dataset.py` |
+| `Phase2_path_patching/utils.py` | `shared/phase2/utils.py` |
+| `Phase3_attention_analysis/attention_extractor.py` | `shared/phase3/attention_extractor.py` |
+| `Phase3_attention_analysis/head_classifier.py` | `shared/phase3/head_classifier.py` |
+| `Phase3_attention_analysis/medical_pattern_detector.py` | `shared/phase3/medical_pattern_detector.py` |
+| `Phase5_pinpoint_tuning/run_spt_medical.py` | `shared/phase5/run_spt_medical.py` |
 
-### Phase 3: 注意分析 ✅
-- [x] head_classifier.py
-- [x] medical_pattern_detector.py
+詳細: [shared/README.md](../shared/README.md)
 
-### Phase 4: 可視化 ✅
-- [x] heatmap_generator.py
-- [x] statistical_analyzer.py
-- [x] report_generator.py
+## 実装状況
 
-### Phase 5: Pinpoint Tuning ✅
-- [x] select_trainable_heads.py
+| Phase | 状態 | 内容 |
+|-------|------|------|
+| Phase 1 | 実装済み | 医療用語アノテーション・Counterfactual生成 |
+| Phase 2 | 実装済み | Path Patching による因果的重要度測定 |
+| Phase 3 | 実装済み | ヘッド分類（3種） |
+| Phase 4 | 実装済み | ヒートマップ・統計分析・レポート |
+| Phase 5 | 実装済み | 選定ヘッドの LoRA fine-tuning（v1〜v5） |
 
-### 共通ユーティリティ ✅
-- [x] tokenizer_utils.py
-- [x] medical_nlp_utils.py
-- [x] visualization_helpers.py
+## Phase5 実験バリアント
 
-### 設定・実行スクリプト ✅
-- [x] medical_config.yaml
-- [x] head_classification_params.yaml
-- [x] run_phase1.sh
-- [x] run_phase3.sh
-- [x] run_full_pipeline.sh
-
-## 使用方法
-
-### Phase 1: データ準備（実行可能）
-
-```bash
-cd /home/Competition2025/P08/P08U023/model_analyze/medical_path_patching
-bash scripts/run_phase1.sh
-```
-
-このフェーズは以下を生成します:
-- アノテーション済みデータ
-- Counterfactualデータ
-- Path Patching用データセット
-
-### Phase 2: Path Patching（要実装）
-
-Phase 2を実行するには、以下のファイルが必要です:
-
-```bash
-# sycophancy-interpretabilityから必要ファイルをコピー
-cp ../sycophancy-interpretability/path_patching/hook_functions.py Phase2_path_patching/
-cp ../sycophancy-interpretability/path_patching/dataset.py Phase2_path_patching/
-
-# path_patching_medical.pyを実装（設計書参照）
-# utils.pyを改変（設計書参照）
-```
-
-### Phase 3: ヘッド分類
-
-```bash
-bash scripts/run_phase3.sh
-```
-
-### Phase 4 & 5: 可視化とPinpoint Tuning
-
-設計書の「実行手順」セクションを参照してください。
-
-## 依存パッケージ
-
-```bash
-pip install torch transformers pandas numpy scipy matplotlib plotly pyyaml seaborn
-```
-
-## 設定ファイルのカスタマイズ
-
-### ヘッド分類基準の調整
-
-`configs/head_classification_params.yaml`で閾値を調整できます:
-
-```yaml
-classification_criteria:
-  medical_term:
-    threshold: 0.30  # 医療用語への平均注意
-  guideline_indicator:
-    spike_threshold: 0.70  # スパイク閾値
-    spike_ratio: 5.0       # スパイク比率
-  reasoning_flow:
-    uniformity_threshold: 0.10  # 均一性
-    attention_mean_threshold: 0.40  # 平均注意
-```
-
-## トラブルシューティング
-
-### OOMエラー
-```bash
-# batch_sizeを削減
-# configs/medical_config.yaml内:
-path_patching:
-  batch_size: 1  # 2 → 1に削減
-```
-
-### 医療用語が検出されない
-```json
-// Phase1_data_preparation/medical_terms_dictionary.jsonに
-// 実際のデータに出現する用語を追加
-```
-
-### ヘッド分類が偏る
-```yaml
-# configs/head_classification_params.yamlの閾値を緩和
-classification_criteria:
-  medical_term:
-    threshold: 0.20  # 0.30 → 0.20に緩和
-```
+| バリアント | 概要 |
+|-----------|------|
+| v1_base | ベースライン実装 |
+| v2_megatron | Megatron設定 |
+| v3_acs_data | ACSデータ使用 |
+| v4_acs_8gpu | 8GPU訓練 |
+| v5_mk2_8gpu | 正のimpactヘッド24個に絞った改良版 |
 
 ## 参考文献
 
 1. Zhang et al. (2025) "Exploring Translation Mechanism of Large Language Models" arXiv:2502.11806
 2. Chen et al. (2024) "From Yes-Men to Truth-Tellers" arXiv:2409.01658
-3. 産婦人科診療ガイドライン婦人科外来編2023
-
-## ライセンス
-
-このプロジェクトは研究目的で作成されました。
-
-## 著者
-
-Claude Code (2025-10-23)
-
-## 実装状況
-
-**Phase 1**: ✅ 完全実装・テスト可能
-**Phase 2**: ⚠️ 一部実装（path_patching_medical.py等が必要）
-**Phase 3**: ✅ 完全実装
-**Phase 4**: ✅ 完全実装
-**Phase 5**: ✅ 完全実装
-
-**次のステップ**: Phase 2の実装完了後、全パイプラインが実行可能になります。

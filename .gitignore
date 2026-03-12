@@ -6,3 +6,5 @@
 outputs/model_outputs/
 venv/
 *.pt
+__pycache__/
+*.pyc
