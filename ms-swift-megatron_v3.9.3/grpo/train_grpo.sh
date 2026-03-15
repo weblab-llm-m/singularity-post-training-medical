@@ -172,7 +172,7 @@ srun --export=ALL -N${SLURM_JOB_NUM_NODES} -n${SLURM_JOB_NUM_NODES} --ntasks-per
           --reward_funcs ophtho chinese \
           --reward_weights 1.5 1.0 \
           --soft_cache_length 1024 \
-          --max_epochs 5 \
+          --max_epochs 1 \
           --eval_interval 50 \
           --save_interval 50 \
           --sleep_level 1 \

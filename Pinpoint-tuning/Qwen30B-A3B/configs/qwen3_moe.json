@@ -1,0 +1,52 @@
+{
+  "model_type": "qwen3_moe",
+  "model_name": "Qwen3-30B-A3B-Instruct-2507",
+  "architecture": {
+    "num_hidden_layers": 48,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 4,
+    "num_key_value_groups": 8,
+    "head_dim": 128,
+    "hidden_size": 2048,
+    "num_experts": 128,
+    "num_experts_per_tok": 8,
+    "moe_intermediate_size": 768
+  },
+  "module_names": {
+    "attention": {
+      "q_proj": "model.layers.{layer}.self_attn.q_proj",
+      "k_proj": "model.layers.{layer}.self_attn.k_proj",
+      "v_proj": "model.layers.{layer}.self_attn.v_proj",
+      "o_proj": "model.layers.{layer}.self_attn.o_proj",
+      "q_norm": "model.layers.{layer}.self_attn.q_norm",
+      "k_norm": "model.layers.{layer}.self_attn.k_norm"
+    },
+    "mlp": {
+      "router": "model.layers.{layer}.mlp.gate",
+      "expert_gate": "model.layers.{layer}.mlp.experts.{expert}.gate_proj",
+      "expert_up": "model.layers.{layer}.mlp.experts.{expert}.up_proj",
+      "expert_down": "model.layers.{layer}.mlp.experts.{expert}.down_proj"
+    },
+    "layernorm": {
+      "input": "model.layers.{layer}.input_layernorm",
+      "post_attn": "model.layers.{layer}.post_attention_layernorm"
+    }
+  },
+  "path_patching": {
+    "attention_heads": {
+      "total": 1536,
+      "per_layer": 32
+    },
+    "experts": {
+      "total": 6144,
+      "per_layer": 128
+    }
+  },
+  "freeze_defaults": {
+    "freeze_router": true,
+    "freeze_experts": true,
+    "freeze_embeddings": true,
+    "freeze_lm_head": true,
+    "freeze_layernorm": true
+  }
+}

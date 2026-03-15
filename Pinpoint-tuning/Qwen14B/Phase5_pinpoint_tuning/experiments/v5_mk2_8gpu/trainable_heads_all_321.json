@@ -1,0 +1,170 @@
+[
+  {
+    "layer": 38,
+    "head": 37,
+    "type": "reasoning_flow",
+    "impact": 0.4402436113783291,
+    "priority": "high"
+  },
+  {
+    "layer": 33,
+    "head": 3,
+    "type": "reasoning_flow",
+    "impact": 0.35680388140359093,
+    "priority": "medium"
+  },
+  {
+    "layer": 29,
+    "head": 7,
+    "type": "reasoning_flow",
+    "impact": 0.30024456552096773,
+    "priority": "medium"
+  },
+  {
+    "layer": 28,
+    "head": 26,
+    "type": "reasoning_flow",
+    "impact": 0.29489198912467274,
+    "priority": "medium"
+  },
+  {
+    "layer": 16,
+    "head": 6,
+    "type": "guideline",
+    "impact": 0.2909044684576137,
+    "priority": "medium"
+  },
+  {
+    "layer": 18,
+    "head": 27,
+    "type": "guideline",
+    "impact": 0.2735559223884983,
+    "priority": "medium"
+  },
+  {
+    "layer": 14,
+    "head": 30,
+    "type": "guideline",
+    "impact": 0.26655645415719065,
+    "priority": "medium"
+  },
+  {
+    "layer": 33,
+    "head": 1,
+    "type": "reasoning_flow",
+    "impact": 0.2662062330969742,
+    "priority": "medium"
+  },
+  {
+    "layer": 32,
+    "head": 22,
+    "type": "reasoning_flow",
+    "impact": 0.2620619911966579,
+    "priority": "medium"
+  },
+  {
+    "layer": 10,
+    "head": 2,
+    "type": "medical_term",
+    "impact": 0.25275948856558117,
+    "priority": "medium"
+  },
+  {
+    "layer": 29,
+    "head": 6,
+    "type": "reasoning_flow",
+    "impact": 0.24804312203611648,
+    "priority": "medium"
+  },
+  {
+    "layer": 8,
+    "head": 19,
+    "type": "medical_term",
+    "impact": 0.24555177055299282,
+    "priority": "medium"
+  },
+  {
+    "layer": 20,
+    "head": 22,
+    "type": "guideline",
+    "impact": 0.23683770355169795,
+    "priority": "medium"
+  },
+  {
+    "layer": 1,
+    "head": 0,
+    "type": "medical_term",
+    "impact": 0.23525691398286394,
+    "priority": "medium"
+  },
+  {
+    "layer": 17,
+    "head": 21,
+    "type": "guideline",
+    "impact": 0.2329288457653352,
+    "priority": "medium"
+  },
+  {
+    "layer": 25,
+    "head": 1,
+    "type": "guideline",
+    "impact": 0.23120733669825963,
+    "priority": "medium"
+  },
+  {
+    "layer": 11,
+    "head": 20,
+    "type": "medical_term",
+    "impact": 0.2306700170572315,
+    "priority": "medium"
+  },
+  {
+    "layer": 32,
+    "head": 0,
+    "type": "reasoning_flow",
+    "impact": 0.2287044966859477,
+    "priority": "medium"
+  },
+  {
+    "layer": 16,
+    "head": 16,
+    "type": "guideline",
+    "impact": 0.21844155394605227,
+    "priority": "medium"
+  },
+  {
+    "layer": 29,
+    "head": 27,
+    "type": "reasoning_flow",
+    "impact": 0.2147896500038249,
+    "priority": "medium"
+  },
+  {
+    "layer": 4,
+    "head": 39,
+    "type": "medical_term",
+    "impact": 0.21100447380117007,
+    "priority": "medium"
+  },
+  {
+    "layer": 8,
+    "head": 37,
+    "type": "medical_term",
+    "impact": 0.21003241304840362,
+    "priority": "medium"
+  },
+  {
+    "layer": 21,
+    "head": 8,
+    "type": "guideline",
+    "impact": 0.20978128537535667,
+    "priority": "medium"
+  },
+  {
+    "layer": 0,
+    "head": 14,
+    "type": "medical_term",
+    "impact": 0.20651377657694475,
+    "priority": "medium"
+  }
+]

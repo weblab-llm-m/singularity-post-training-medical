@@ -1,0 +1,17 @@
+# Qwen3-30B-A3B用 閾値設定 (256サンプルの統計に基づき調整)
+#
+# 狙い: M=143(9%) P=205(13%) R=469(31%) U=719(47%)
+
+classification_criteria:
+  medical_term:
+    threshold: 0.0042        # p90 → 上位~9%
+
+  profile_indicator:
+    spike_threshold: 0.40    # max attention > 40%
+    spike_ratio: 500.0       # spike比率 500倍以上
+
+  reasoning_flow:
+    uniformity_threshold: 0.010        # std < 0.010
+    attention_mean_threshold: 0.002    # mean > 0.002
+    relative_std_threshold: 3.0        # relative_std < 3.0
+    adjacent_window: 3

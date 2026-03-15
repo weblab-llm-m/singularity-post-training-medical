@@ -320,6 +320,92 @@ class MegatronTunerMixin:
 
 
 @dataclass
+class MegatronTunerMixin:
+    train_type: Literal['lora', 'full'] = 'full'
+    freeze_llm: bool = False
+    freeze_vit: bool = True
+    freeze_aligner: bool = True
+    # full
+    freeze_parameters: List[str] = field(default_factory=list)
+    freeze_parameters_regex: Optional[str] = None
+    freeze_parameters_ratio: float = 0.  # 0 ~ 1
+    trainable_parameters: List[str] = field(default_factory=list)
+    trainable_parameters_regex: Optional[str] = None
+    
+    # ============================================================
+    # PinPointTuning Parameters (追加部分)
+    # ============================================================
+    # Enable PinPointTuning mode
+    pinpoint_tuning: bool = False
+    
+    # Layer-level control: comma-separated layer indices (e.g., "5,10,15,20")
+    pinpoint_trainable_layers: Optional[str] = None
+    
+    # Expert-level control: JSON dict of {layer_idx: [expert_ids]}
+    # Example: '{"5": [3, 7], "10": [1, 4]}'
+    pinpoint_trainable_experts: Optional[str] = None
+    
+    # Attention head-level control: JSON dict of {layer_idx: [head_ids]}
+    # Example: '{"5": [0, 1, 2], "10": [3, 4, 5]}'
+    pinpoint_trainable_heads: Optional[str] = None
+    
+    # Freeze control flags
+    pinpoint_freeze_mlp: bool = True
+    pinpoint_freeze_attention: bool = False
+    pinpoint_freeze_router: bool = True
+    pinpoint_freeze_shared_expert: bool = True
+    pinpoint_freeze_embed_lm_head: bool = True
+    # ============================================================
+    
+    # lora
+    adapter_load: Optional[str] = None
+    target_modules: List[str] = field(default_factory=lambda: ['all-linear'])
+    target_regex: Optional[str] = None
+    modules_to_save: List[str] = field(default_factory=list)
+
+    # lora
+    lora_rank: int = 8
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    lora_bias: Literal['none', 'all'] = 'none'
+    lora_dtype: Literal['float16', 'bfloat16', 'float32', None] = None
+    use_rslora: bool = False
+
+    def __post_init__(self):
+        if self.freeze_parameters_ratio > 0 and self.pipeline_model_parallel_size > 1:
+            raise ValueError('`freeze_parameters_ratio` is not supported when `pipeline_model_parallel_size` > 1')
+        if self.target_regex:
+            self.target_modules = self.target_regex
+        
+        # ============================================================
+        # PinPointTuning Validation (追加部分)
+        # ============================================================
+        if self.pinpoint_tuning:
+            # Validate that at least one trainable specification is provided
+            has_layer_spec = self.pinpoint_trainable_layers is not None
+            has_expert_spec = self.pinpoint_trainable_experts is not None
+            has_head_spec = self.pinpoint_trainable_heads is not None
+            
+            if not (has_layer_spec or has_expert_spec or has_head_spec):
+                logger.warning(
+                    '[PinPointTuning] pinpoint_tuning is enabled but no trainable layers/experts/heads specified. '
+                    'All parameters matching freeze settings will be affected.'
+                )
+            
+            # Log configuration
+            logger.info(f'[PinPointTuning] Enabled with configuration:')
+            logger.info(f'  - trainable_layers: {self.pinpoint_trainable_layers}')
+            logger.info(f'  - trainable_experts: {self.pinpoint_trainable_experts}')
+            logger.info(f'  - trainable_heads: {self.pinpoint_trainable_heads}')
+            logger.info(f'  - freeze_mlp: {self.pinpoint_freeze_mlp}')
+            logger.info(f'  - freeze_attention: {self.pinpoint_freeze_attention}')
+            logger.info(f'  - freeze_router: {self.pinpoint_freeze_router}')
+            logger.info(f'  - freeze_shared_expert: {self.pinpoint_freeze_shared_expert}')
+            logger.info(f'  - freeze_embed_lm_head: {self.pinpoint_freeze_embed_lm_head}')
+        # ============================================================
+
+
+@dataclass
 class ExtraMegatronArguments(RLHFMegatronArgumentsMixin, MegatronTunerMixin):
     padded_vocab_size: Optional[int] = None
     initialize_embedding: bool = False

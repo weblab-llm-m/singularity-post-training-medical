@@ -1,0 +1,154 @@
+{
+  "timestamp": "2026-03-02T19:56:07.133887",
+  "model": "positive_pinpoint",
+  "data": "overlap_4393",
+  "total_processes": 128,
+  "succeeded": 128,
+  "failed_processes": [],
+  "total_samples": 4393,
+  "result_shape": [
+    48,
+    32
+  ],
+  "per_sample_shape": [
+    4393,
+    48,
+    32
+  ],
+  "top_negative_heads": [
+    {
+      "rank": 1,
+      "layer": 8,
+      "head": 5,
+      "impact": -Infinity
+    },
+    {
+      "rank": 2,
+      "layer": 5,
+      "head": 24,
+      "impact": -Infinity
+    },
+    {
+      "rank": 3,
+      "layer": 4,
+      "head": 31,
+      "impact": -3.0523977279663086
+    },
+    {
+      "rank": 4,
+      "layer": 10,
+      "head": 9,
+      "impact": -1.0688190460205078
+    },
+    {
+      "rank": 5,
+      "layer": 25,
+      "head": 29,
+      "impact": -0.7563540935516357
+    },
+    {
+      "rank": 6,
+      "layer": 22,
+      "head": 12,
+      "impact": -0.6547947525978088
+    },
+    {
+      "rank": 7,
+      "layer": 17,
+      "head": 8,
+      "impact": -0.6177133321762085
+    },
+    {
+      "rank": 8,
+      "layer": 14,
+      "head": 9,
+      "impact": -0.584021806716919
+    },
+    {
+      "rank": 9,
+      "layer": 23,
+      "head": 14,
+      "impact": -0.5259960293769836
+    },
+    {
+      "rank": 10,
+      "layer": 9,
+      "head": 19,
+      "impact": -0.33911746740341187
+    },
+    {
+      "rank": 11,
+      "layer": 4,
+      "head": 0,
+      "impact": -0.32663533091545105
+    },
+    {
+      "rank": 12,
+      "layer": 24,
+      "head": 10,
+      "impact": -0.3056141138076782
+    },
+    {
+      "rank": 13,
+      "layer": 11,
+      "head": 27,
+      "impact": -0.2899003326892853
+    },
+    {
+      "rank": 14,
+      "layer": 12,
+      "head": 7,
+      "impact": -0.28242966532707214
+    },
+    {
+      "rank": 15,
+      "layer": 3,
+      "head": 27,
+      "impact": -0.28140151500701904
+    },
+    {
+      "rank": 16,
+      "layer": 14,
+      "head": 21,
+      "impact": -0.2582399845123291
+    },
+    {
+      "rank": 17,
+      "layer": 10,
+      "head": 24,
+      "impact": -0.22559387981891632
+    },
+    {
+      "rank": 18,
+      "layer": 28,
+      "head": 30,
+      "impact": -0.2238960713148117
+    },
+    {
+      "rank": 19,
+      "layer": 10,
+      "head": 15,
+      "impact": -0.22115275263786316
+    },
+    {
+      "rank": 20,
+      "layer": 4,
+      "head": 22,
+      "impact": -0.19085955619812012
+    }
+  ],
+  "global_stats": {
+    "mean": -Infinity,
+    "std": NaN,
+    "min": -Infinity,
+    "max": 3.1240739822387695
+  },
+  "per_sample_stats": {
+    "mean_std_across_heads": NaN,
+    "max_std_head": {
+      "layer": 5,
+      "head": 24,
+      "std": NaN
+    }
+  }
+}

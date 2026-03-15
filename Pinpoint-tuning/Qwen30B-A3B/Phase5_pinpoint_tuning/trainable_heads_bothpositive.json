@@ -1,0 +1,2270 @@
+[
+  {
+    "layer": 47,
+    "head": 27,
+    "medical_impact": 0.049448,
+    "reasoning_impact": 0.129067
+  },
+  {
+    "layer": 1,
+    "head": 12,
+    "medical_impact": 0.03128,
+    "reasoning_impact": 0.028487
+  },
+  {
+    "layer": 47,
+    "head": 25,
+    "medical_impact": 0.010392,
+    "reasoning_impact": 0.04849
+  },
+  {
+    "layer": 47,
+    "head": 29,
+    "medical_impact": 0.018531,
+    "reasoning_impact": 0.036748
+  },
+  {
+    "layer": 0,
+    "head": 21,
+    "medical_impact": 0.030868,
+    "reasoning_impact": 0.023344
+  },
+  {
+    "layer": 2,
+    "head": 27,
+    "medical_impact": 0.021828,
+    "reasoning_impact": 0.027615
+  },
+  {
+    "layer": 0,
+    "head": 2,
+    "medical_impact": 0.01287,
+    "reasoning_impact": 0.030549
+  },
+  {
+    "layer": 1,
+    "head": 1,
+    "medical_impact": 0.027041,
+    "reasoning_impact": 0.014718
+  },
+  {
+    "layer": 1,
+    "head": 0,
+    "medical_impact": 0.014342,
+    "reasoning_impact": 0.021106
+  },
+  {
+    "layer": 46,
+    "head": 18,
+    "medical_impact": 0.004393,
+    "reasoning_impact": 0.030603
+  },
+  {
+    "layer": 1,
+    "head": 20,
+    "medical_impact": 0.010346,
+    "reasoning_impact": 0.022718
+  },
+  {
+    "layer": 13,
+    "head": 22,
+    "medical_impact": 0.011226,
+    "reasoning_impact": 0.020958
+  },
+  {
+    "layer": 1,
+    "head": 23,
+    "medical_impact": 0.013146,
+    "reasoning_impact": 0.018638
+  },
+  {
+    "layer": 1,
+    "head": 24,
+    "medical_impact": 0.008864,
+    "reasoning_impact": 0.022229
+  },
+  {
+    "layer": 1,
+    "head": 18,
+    "medical_impact": 0.023844,
+    "reasoning_impact": 0.006762
+  },
+  {
+    "layer": 46,
+    "head": 23,
+    "medical_impact": 0.001238,
+    "reasoning_impact": 0.02822
+  },
+  {
+    "layer": 1,
+    "head": 14,
+    "medical_impact": 0.018488,
+    "reasoning_impact": 0.010661
+  },
+  {
+    "layer": 24,
+    "head": 5,
+    "medical_impact": 0.004518,
+    "reasoning_impact": 0.024026
+  },
+  {
+    "layer": 0,
+    "head": 14,
+    "medical_impact": 0.013162,
+    "reasoning_impact": 0.014692
+  },
+  {
+    "layer": 0,
+    "head": 0,
+    "medical_impact": 0.024777,
+    "reasoning_impact": 0.002567
+  },
+  {
+    "layer": 19,
+    "head": 25,
+    "medical_impact": 0.013682,
+    "reasoning_impact": 0.013603
+  },
+  {
+    "layer": 0,
+    "head": 5,
+    "medical_impact": 0.017562,
+    "reasoning_impact": 0.009633
+  },
+  {
+    "layer": 3,
+    "head": 21,
+    "medical_impact": 0.004936,
+    "reasoning_impact": 0.021967
+  },
+  {
+    "layer": 0,
+    "head": 6,
+    "medical_impact": 0.017346,
+    "reasoning_impact": 0.009455
+  },
+  {
+    "layer": 12,
+    "head": 3,
+    "medical_impact": 0.016455,
+    "reasoning_impact": 0.010304
+  },
+  {
+    "layer": 1,
+    "head": 19,
+    "medical_impact": 0.011621,
+    "reasoning_impact": 0.014162
+  },
+  {
+    "layer": 22,
+    "head": 27,
+    "medical_impact": 0.019428,
+    "reasoning_impact": 0.004919
+  },
+  {
+    "layer": 11,
+    "head": 2,
+    "medical_impact": 0.001349,
+    "reasoning_impact": 0.022787
+  },
+  {
+    "layer": 36,
+    "head": 2,
+    "medical_impact": 0.008887,
+    "reasoning_impact": 0.014807
+  },
+  {
+    "layer": 24,
+    "head": 3,
+    "medical_impact": 0.01113,
+    "reasoning_impact": 0.012322
+  },
+  {
+    "layer": 19,
+    "head": 6,
+    "medical_impact": 0.013105,
+    "reasoning_impact": 0.010343
+  },
+  {
+    "layer": 24,
+    "head": 8,
+    "medical_impact": 0.009258,
+    "reasoning_impact": 0.014174
+  },
+  {
+    "layer": 10,
+    "head": 8,
+    "medical_impact": 0.015425,
+    "reasoning_impact": 0.007539
+  },
+  {
+    "layer": 4,
+    "head": 7,
+    "medical_impact": 0.006935,
+    "reasoning_impact": 0.015855
+  },
+  {
+    "layer": 5,
+    "head": 25,
+    "medical_impact": 0.015394,
+    "reasoning_impact": 0.007209
+  },
+  {
+    "layer": 2,
+    "head": 13,
+    "medical_impact": 0.021657,
+    "reasoning_impact": 0.000884
+  },
+  {
+    "layer": 0,
+    "head": 23,
+    "medical_impact": 0.01277,
+    "reasoning_impact": 0.009701
+  },
+  {
+    "layer": 22,
+    "head": 14,
+    "medical_impact": 0.004389,
+    "reasoning_impact": 0.01808
+  },
+  {
+    "layer": 0,
+    "head": 27,
+    "medical_impact": 0.005815,
+    "reasoning_impact": 0.015899
+  },
+  {
+    "layer": 26,
+    "head": 16,
+    "medical_impact": 0.015251,
+    "reasoning_impact": 0.006381
+  },
+  {
+    "layer": 0,
+    "head": 19,
+    "medical_impact": 0.013912,
+    "reasoning_impact": 0.0077
+  },
+  {
+    "layer": 1,
+    "head": 17,
+    "medical_impact": 0.010461,
+    "reasoning_impact": 0.011135
+  },
+  {
+    "layer": 22,
+    "head": 2,
+    "medical_impact": 0.007459,
+    "reasoning_impact": 0.01408
+  },
+  {
+    "layer": 24,
+    "head": 20,
+    "medical_impact": 0.010454,
+    "reasoning_impact": 0.010331
+  },
+  {
+    "layer": 0,
+    "head": 31,
+    "medical_impact": 0.013227,
+    "reasoning_impact": 0.007398
+  },
+  {
+    "layer": 25,
+    "head": 17,
+    "medical_impact": 0.0112,
+    "reasoning_impact": 0.008883
+  },
+  {
+    "layer": 15,
+    "head": 14,
+    "medical_impact": 0.010407,
+    "reasoning_impact": 0.009501
+  },
+  {
+    "layer": 15,
+    "head": 28,
+    "medical_impact": 0.000964,
+    "reasoning_impact": 0.018918
+  },
+  {
+    "layer": 2,
+    "head": 24,
+    "medical_impact": 0.007,
+    "reasoning_impact": 0.012864
+  },
+  {
+    "layer": 12,
+    "head": 5,
+    "medical_impact": 1.7e-05,
+    "reasoning_impact": 0.019741
+  },
+  {
+    "layer": 15,
+    "head": 19,
+    "medical_impact": 0.011316,
+    "reasoning_impact": 0.008403
+  },
+  {
+    "layer": 17,
+    "head": 16,
+    "medical_impact": 0.007341,
+    "reasoning_impact": 0.012057
+  },
+  {
+    "layer": 24,
+    "head": 14,
+    "medical_impact": 0.007221,
+    "reasoning_impact": 0.012114
+  },
+  {
+    "layer": 21,
+    "head": 25,
+    "medical_impact": 0.015702,
+    "reasoning_impact": 0.003585
+  },
+  {
+    "layer": 0,
+    "head": 4,
+    "medical_impact": 0.000821,
+    "reasoning_impact": 0.018296
+  },
+  {
+    "layer": 7,
+    "head": 29,
+    "medical_impact": 0.006809,
+    "reasoning_impact": 0.012247
+  },
+  {
+    "layer": 9,
+    "head": 17,
+    "medical_impact": 0.005592,
+    "reasoning_impact": 0.013228
+  },
+  {
+    "layer": 23,
+    "head": 10,
+    "medical_impact": 0.004668,
+    "reasoning_impact": 0.014069
+  },
+  {
+    "layer": 34,
+    "head": 24,
+    "medical_impact": 0.016526,
+    "reasoning_impact": 0.002156
+  },
+  {
+    "layer": 14,
+    "head": 18,
+    "medical_impact": 0.003373,
+    "reasoning_impact": 0.015225
+  },
+  {
+    "layer": 19,
+    "head": 19,
+    "medical_impact": 0.011486,
+    "reasoning_impact": 0.006831
+  },
+  {
+    "layer": 1,
+    "head": 3,
+    "medical_impact": 0.003051,
+    "reasoning_impact": 0.015213
+  },
+  {
+    "layer": 1,
+    "head": 22,
+    "medical_impact": 0.004539,
+    "reasoning_impact": 0.013718
+  },
+  {
+    "layer": 32,
+    "head": 26,
+    "medical_impact": 0.009563,
+    "reasoning_impact": 0.008647
+  },
+  {
+    "layer": 21,
+    "head": 11,
+    "medical_impact": 0.008254,
+    "reasoning_impact": 0.009951
+  },
+  {
+    "layer": 30,
+    "head": 16,
+    "medical_impact": 0.006984,
+    "reasoning_impact": 0.011137
+  },
+  {
+    "layer": 24,
+    "head": 17,
+    "medical_impact": 0.004727,
+    "reasoning_impact": 0.013282
+  },
+  {
+    "layer": 21,
+    "head": 23,
+    "medical_impact": 0.010627,
+    "reasoning_impact": 0.007345
+  },
+  {
+    "layer": 30,
+    "head": 4,
+    "medical_impact": 0.006364,
+    "reasoning_impact": 0.011601
+  },
+  {
+    "layer": 26,
+    "head": 14,
+    "medical_impact": 0.012615,
+    "reasoning_impact": 0.005306
+  },
+  {
+    "layer": 11,
+    "head": 26,
+    "medical_impact": 0.017082,
+    "reasoning_impact": 0.000833
+  },
+  {
+    "layer": 21,
+    "head": 10,
+    "medical_impact": 0.012979,
+    "reasoning_impact": 0.004936
+  },
+  {
+    "layer": 27,
+    "head": 24,
+    "medical_impact": 0.014479,
+    "reasoning_impact": 0.003354
+  },
+  {
+    "layer": 2,
+    "head": 29,
+    "medical_impact": 0.015328,
+    "reasoning_impact": 0.002436
+  },
+  {
+    "layer": 21,
+    "head": 4,
+    "medical_impact": 0.013463,
+    "reasoning_impact": 0.004249
+  },
+  {
+    "layer": 27,
+    "head": 4,
+    "medical_impact": 0.012711,
+    "reasoning_impact": 0.004945
+  },
+  {
+    "layer": 15,
+    "head": 16,
+    "medical_impact": 0.013255,
+    "reasoning_impact": 0.004295
+  },
+  {
+    "layer": 11,
+    "head": 9,
+    "medical_impact": 0.001482,
+    "reasoning_impact": 0.015899
+  },
+  {
+    "layer": 26,
+    "head": 5,
+    "medical_impact": 0.01065,
+    "reasoning_impact": 0.006241
+  },
+  {
+    "layer": 20,
+    "head": 3,
+    "medical_impact": 0.012229,
+    "reasoning_impact": 0.004595
+  },
+  {
+    "layer": 18,
+    "head": 22,
+    "medical_impact": 0.01046,
+    "reasoning_impact": 0.006336
+  },
+  {
+    "layer": 22,
+    "head": 0,
+    "medical_impact": 0.007073,
+    "reasoning_impact": 0.009651
+  },
+  {
+    "layer": 35,
+    "head": 10,
+    "medical_impact": 0.003899,
+    "reasoning_impact": 0.012824
+  },
+  {
+    "layer": 18,
+    "head": 21,
+    "medical_impact": 0.0114,
+    "reasoning_impact": 0.005182
+  },
+  {
+    "layer": 1,
+    "head": 11,
+    "medical_impact": 0.014552,
+    "reasoning_impact": 0.002026
+  },
+  {
+    "layer": 20,
+    "head": 21,
+    "medical_impact": 0.014867,
+    "reasoning_impact": 0.00143
+  },
+  {
+    "layer": 20,
+    "head": 26,
+    "medical_impact": 0.007862,
+    "reasoning_impact": 0.008415
+  },
+  {
+    "layer": 30,
+    "head": 15,
+    "medical_impact": 0.008671,
+    "reasoning_impact": 0.007599
+  },
+  {
+    "layer": 9,
+    "head": 7,
+    "medical_impact": 0.014095,
+    "reasoning_impact": 0.00217
+  },
+  {
+    "layer": 25,
+    "head": 24,
+    "medical_impact": 0.007931,
+    "reasoning_impact": 0.008309
+  },
+  {
+    "layer": 5,
+    "head": 31,
+    "medical_impact": 0.011055,
+    "reasoning_impact": 0.00513
+  },
+  {
+    "layer": 44,
+    "head": 31,
+    "medical_impact": 0.003732,
+    "reasoning_impact": 0.012451
+  },
+  {
+    "layer": 22,
+    "head": 20,
+    "medical_impact": 0.015434,
+    "reasoning_impact": 0.000729
+  },
+  {
+    "layer": 22,
+    "head": 1,
+    "medical_impact": 0.004008,
+    "reasoning_impact": 0.012145
+  },
+  {
+    "layer": 21,
+    "head": 6,
+    "medical_impact": 0.013292,
+    "reasoning_impact": 0.002813
+  },
+  {
+    "layer": 6,
+    "head": 29,
+    "medical_impact": 0.004134,
+    "reasoning_impact": 0.011774
+  },
+  {
+    "layer": 0,
+    "head": 3,
+    "medical_impact": 0.004823,
+    "reasoning_impact": 0.011064
+  },
+  {
+    "layer": 10,
+    "head": 14,
+    "medical_impact": 0.014955,
+    "reasoning_impact": 0.000932
+  },
+  {
+    "layer": 9,
+    "head": 28,
+    "medical_impact": 0.011667,
+    "reasoning_impact": 0.004083
+  },
+  {
+    "layer": 37,
+    "head": 2,
+    "medical_impact": 0.011598,
+    "reasoning_impact": 0.004138
+  },
+  {
+    "layer": 27,
+    "head": 14,
+    "medical_impact": 0.006589,
+    "reasoning_impact": 0.009117
+  },
+  {
+    "layer": 7,
+    "head": 9,
+    "medical_impact": 0.009146,
+    "reasoning_impact": 0.006395
+  },
+  {
+    "layer": 19,
+    "head": 26,
+    "medical_impact": 0.010432,
+    "reasoning_impact": 0.005039
+  },
+  {
+    "layer": 2,
+    "head": 30,
+    "medical_impact": 0.005701,
+    "reasoning_impact": 0.009751
+  },
+  {
+    "layer": 4,
+    "head": 6,
+    "medical_impact": 0.007061,
+    "reasoning_impact": 0.008304
+  },
+  {
+    "layer": 35,
+    "head": 31,
+    "medical_impact": 0.004923,
+    "reasoning_impact": 0.010442
+  },
+  {
+    "layer": 19,
+    "head": 20,
+    "medical_impact": 0.007496,
+    "reasoning_impact": 0.007846
+  },
+  {
+    "layer": 22,
+    "head": 17,
+    "medical_impact": 0.006247,
+    "reasoning_impact": 0.009005
+  },
+  {
+    "layer": 14,
+    "head": 4,
+    "medical_impact": 0.011156,
+    "reasoning_impact": 0.004041
+  },
+  {
+    "layer": 23,
+    "head": 2,
+    "medical_impact": 0.00659,
+    "reasoning_impact": 0.008604
+  },
+  {
+    "layer": 31,
+    "head": 15,
+    "medical_impact": 0.006822,
+    "reasoning_impact": 0.008358
+  },
+  {
+    "layer": 3,
+    "head": 14,
+    "medical_impact": 0.014931,
+    "reasoning_impact": 0.000247
+  },
+  {
+    "layer": 27,
+    "head": 9,
+    "medical_impact": 0.013291,
+    "reasoning_impact": 0.001876
+  },
+  {
+    "layer": 10,
+    "head": 0,
+    "medical_impact": 0.000418,
+    "reasoning_impact": 0.014711
+  },
+  {
+    "layer": 5,
+    "head": 7,
+    "medical_impact": 0.011358,
+    "reasoning_impact": 0.003622
+  },
+  {
+    "layer": 26,
+    "head": 13,
+    "medical_impact": 0.009063,
+    "reasoning_impact": 0.005856
+  },
+  {
+    "layer": 5,
+    "head": 27,
+    "medical_impact": 0.004924,
+    "reasoning_impact": 0.009944
+  },
+  {
+    "layer": 7,
+    "head": 23,
+    "medical_impact": 0.008429,
+    "reasoning_impact": 0.00633
+  },
+  {
+    "layer": 36,
+    "head": 3,
+    "medical_impact": 0.002403,
+    "reasoning_impact": 0.012328
+  },
+  {
+    "layer": 34,
+    "head": 23,
+    "medical_impact": 0.008604,
+    "reasoning_impact": 0.006058
+  },
+  {
+    "layer": 15,
+    "head": 21,
+    "medical_impact": 0.011662,
+    "reasoning_impact": 0.002997
+  },
+  {
+    "layer": 26,
+    "head": 28,
+    "medical_impact": 0.001216,
+    "reasoning_impact": 0.013419
+  },
+  {
+    "layer": 21,
+    "head": 27,
+    "medical_impact": 0.0024,
+    "reasoning_impact": 0.012151
+  },
+  {
+    "layer": 6,
+    "head": 4,
+    "medical_impact": 0.009771,
+    "reasoning_impact": 0.004768
+  },
+  {
+    "layer": 2,
+    "head": 28,
+    "medical_impact": 0.010126,
+    "reasoning_impact": 0.004395
+  },
+  {
+    "layer": 19,
+    "head": 12,
+    "medical_impact": 0.006652,
+    "reasoning_impact": 0.007861
+  },
+  {
+    "layer": 12,
+    "head": 26,
+    "medical_impact": 0.006042,
+    "reasoning_impact": 0.008447
+  },
+  {
+    "layer": 31,
+    "head": 22,
+    "medical_impact": 0.003953,
+    "reasoning_impact": 0.010433
+  },
+  {
+    "layer": 14,
+    "head": 3,
+    "medical_impact": 0.003137,
+    "reasoning_impact": 0.011128
+  },
+  {
+    "layer": 21,
+    "head": 3,
+    "medical_impact": 0.006903,
+    "reasoning_impact": 0.007297
+  },
+  {
+    "layer": 12,
+    "head": 10,
+    "medical_impact": 0.006226,
+    "reasoning_impact": 0.007806
+  },
+  {
+    "layer": 22,
+    "head": 10,
+    "medical_impact": 0.010317,
+    "reasoning_impact": 0.003617
+  },
+  {
+    "layer": 2,
+    "head": 31,
+    "medical_impact": 0.001599,
+    "reasoning_impact": 0.012309
+  },
+  {
+    "layer": 5,
+    "head": 28,
+    "medical_impact": 0.004172,
+    "reasoning_impact": 0.009655
+  },
+  {
+    "layer": 29,
+    "head": 2,
+    "medical_impact": 0.005996,
+    "reasoning_impact": 0.007817
+  },
+  {
+    "layer": 34,
+    "head": 21,
+    "medical_impact": 0.005118,
+    "reasoning_impact": 0.008575
+  },
+  {
+    "layer": 34,
+    "head": 25,
+    "medical_impact": 0.004681,
+    "reasoning_impact": 0.008986
+  },
+  {
+    "layer": 1,
+    "head": 26,
+    "medical_impact": 0.006615,
+    "reasoning_impact": 0.007047
+  },
+  {
+    "layer": 7,
+    "head": 5,
+    "medical_impact": 0.008564,
+    "reasoning_impact": 0.005048
+  },
+  {
+    "layer": 16,
+    "head": 5,
+    "medical_impact": 0.007412,
+    "reasoning_impact": 0.006153
+  },
+  {
+    "layer": 1,
+    "head": 7,
+    "medical_impact": 0.003978,
+    "reasoning_impact": 0.009583
+  },
+  {
+    "layer": 35,
+    "head": 21,
+    "medical_impact": 0.006597,
+    "reasoning_impact": 0.006954
+  },
+  {
+    "layer": 28,
+    "head": 6,
+    "medical_impact": 0.005111,
+    "reasoning_impact": 0.00836
+  },
+  {
+    "layer": 2,
+    "head": 17,
+    "medical_impact": 0.006518,
+    "reasoning_impact": 0.006945
+  },
+  {
+    "layer": 14,
+    "head": 28,
+    "medical_impact": 0.010172,
+    "reasoning_impact": 0.003275
+  },
+  {
+    "layer": 34,
+    "head": 0,
+    "medical_impact": 0.001912,
+    "reasoning_impact": 0.011529
+  },
+  {
+    "layer": 29,
+    "head": 5,
+    "medical_impact": 0.011435,
+    "reasoning_impact": 0.001846
+  },
+  {
+    "layer": 34,
+    "head": 1,
+    "medical_impact": 0.006125,
+    "reasoning_impact": 0.007144
+  },
+  {
+    "layer": 34,
+    "head": 13,
+    "medical_impact": 0.007031,
+    "reasoning_impact": 0.006213
+  },
+  {
+    "layer": 47,
+    "head": 1,
+    "medical_impact": 0.00746,
+    "reasoning_impact": 0.00577
+  },
+  {
+    "layer": 12,
+    "head": 7,
+    "medical_impact": 0.011894,
+    "reasoning_impact": 0.001244
+  },
+  {
+    "layer": 23,
+    "head": 1,
+    "medical_impact": 0.002317,
+    "reasoning_impact": 0.010688
+  },
+  {
+    "layer": 29,
+    "head": 13,
+    "medical_impact": 0.002893,
+    "reasoning_impact": 0.010084
+  },
+  {
+    "layer": 37,
+    "head": 19,
+    "medical_impact": 0.007927,
+    "reasoning_impact": 0.005032
+  },
+  {
+    "layer": 14,
+    "head": 2,
+    "medical_impact": 0.006383,
+    "reasoning_impact": 0.006565
+  },
+  {
+    "layer": 29,
+    "head": 7,
+    "medical_impact": 0.005143,
+    "reasoning_impact": 0.007608
+  },
+  {
+    "layer": 8,
+    "head": 0,
+    "medical_impact": 0.010786,
+    "reasoning_impact": 0.001953
+  },
+  {
+    "layer": 25,
+    "head": 0,
+    "medical_impact": 0.006534,
+    "reasoning_impact": 0.005994
+  },
+  {
+    "layer": 2,
+    "head": 6,
+    "medical_impact": 0.005,
+    "reasoning_impact": 0.007498
+  },
+  {
+    "layer": 23,
+    "head": 8,
+    "medical_impact": 0.007502,
+    "reasoning_impact": 0.004906
+  },
+  {
+    "layer": 24,
+    "head": 22,
+    "medical_impact": 0.004802,
+    "reasoning_impact": 0.007509
+  },
+  {
+    "layer": 6,
+    "head": 12,
+    "medical_impact": 0.002114,
+    "reasoning_impact": 0.010195
+  },
+  {
+    "layer": 26,
+    "head": 19,
+    "medical_impact": 0.006025,
+    "reasoning_impact": 0.006226
+  },
+  {
+    "layer": 24,
+    "head": 12,
+    "medical_impact": 0.00951,
+    "reasoning_impact": 0.002699
+  },
+  {
+    "layer": 22,
+    "head": 5,
+    "medical_impact": 0.002524,
+    "reasoning_impact": 0.009595
+  },
+  {
+    "layer": 36,
+    "head": 27,
+    "medical_impact": 0.008323,
+    "reasoning_impact": 0.003664
+  },
+  {
+    "layer": 35,
+    "head": 20,
+    "medical_impact": 0.001977,
+    "reasoning_impact": 0.00996
+  },
+  {
+    "layer": 25,
+    "head": 30,
+    "medical_impact": 0.004461,
+    "reasoning_impact": 0.007319
+  },
+  {
+    "layer": 33,
+    "head": 26,
+    "medical_impact": 0.007917,
+    "reasoning_impact": 0.00379
+  },
+  {
+    "layer": 22,
+    "head": 4,
+    "medical_impact": 0.00092,
+    "reasoning_impact": 0.010714
+  },
+  {
+    "layer": 35,
+    "head": 15,
+    "medical_impact": 0.003437,
+    "reasoning_impact": 0.008169
+  },
+  {
+    "layer": 3,
+    "head": 1,
+    "medical_impact": 0.005407,
+    "reasoning_impact": 0.006194
+  },
+  {
+    "layer": 15,
+    "head": 7,
+    "medical_impact": 0.005552,
+    "reasoning_impact": 0.005981
+  },
+  {
+    "layer": 28,
+    "head": 13,
+    "medical_impact": 0.010101,
+    "reasoning_impact": 0.001399
+  },
+  {
+    "layer": 11,
+    "head": 12,
+    "medical_impact": 0.010224,
+    "reasoning_impact": 0.00123
+  },
+  {
+    "layer": 25,
+    "head": 14,
+    "medical_impact": 0.010393,
+    "reasoning_impact": 0.000898
+  },
+  {
+    "layer": 35,
+    "head": 24,
+    "medical_impact": 0.006164,
+    "reasoning_impact": 0.004909
+  },
+  {
+    "layer": 40,
+    "head": 19,
+    "medical_impact": 0.001828,
+    "reasoning_impact": 0.009129
+  },
+  {
+    "layer": 6,
+    "head": 26,
+    "medical_impact": 0.007219,
+    "reasoning_impact": 0.003711
+  },
+  {
+    "layer": 14,
+    "head": 7,
+    "medical_impact": 0.005348,
+    "reasoning_impact": 0.005498
+  },
+  {
+    "layer": 15,
+    "head": 25,
+    "medical_impact": 0.000737,
+    "reasoning_impact": 0.009983
+  },
+  {
+    "layer": 28,
+    "head": 12,
+    "medical_impact": 0.004035,
+    "reasoning_impact": 0.006613
+  },
+  {
+    "layer": 6,
+    "head": 30,
+    "medical_impact": 0.009248,
+    "reasoning_impact": 0.00138
+  },
+  {
+    "layer": 36,
+    "head": 0,
+    "medical_impact": 0.007925,
+    "reasoning_impact": 0.00259
+  },
+  {
+    "layer": 34,
+    "head": 10,
+    "medical_impact": 0.007394,
+    "reasoning_impact": 0.003082
+  },
+  {
+    "layer": 8,
+    "head": 31,
+    "medical_impact": 0.0042,
+    "reasoning_impact": 0.006226
+  },
+  {
+    "layer": 23,
+    "head": 27,
+    "medical_impact": 0.001172,
+    "reasoning_impact": 0.009253
+  },
+  {
+    "layer": 32,
+    "head": 3,
+    "medical_impact": 0.006386,
+    "reasoning_impact": 0.004031
+  },
+  {
+    "layer": 35,
+    "head": 22,
+    "medical_impact": 0.003805,
+    "reasoning_impact": 0.006604
+  },
+  {
+    "layer": 20,
+    "head": 16,
+    "medical_impact": 0.003122,
+    "reasoning_impact": 0.007261
+  },
+  {
+    "layer": 26,
+    "head": 24,
+    "medical_impact": 0.003668,
+    "reasoning_impact": 0.006613
+  },
+  {
+    "layer": 36,
+    "head": 1,
+    "medical_impact": 0.005919,
+    "reasoning_impact": 0.004361
+  },
+  {
+    "layer": 33,
+    "head": 14,
+    "medical_impact": 0.009061,
+    "reasoning_impact": 0.001206
+  },
+  {
+    "layer": 23,
+    "head": 17,
+    "medical_impact": 0.003191,
+    "reasoning_impact": 0.007035
+  },
+  {
+    "layer": 20,
+    "head": 30,
+    "medical_impact": 0.008478,
+    "reasoning_impact": 0.001709
+  },
+  {
+    "layer": 47,
+    "head": 13,
+    "medical_impact": 0.008302,
+    "reasoning_impact": 0.001733
+  },
+  {
+    "layer": 26,
+    "head": 0,
+    "medical_impact": 0.002933,
+    "reasoning_impact": 0.007048
+  },
+  {
+    "layer": 27,
+    "head": 23,
+    "medical_impact": 0.007827,
+    "reasoning_impact": 0.002136
+  },
+  {
+    "layer": 30,
+    "head": 13,
+    "medical_impact": 0.003199,
+    "reasoning_impact": 0.006754
+  },
+  {
+    "layer": 25,
+    "head": 9,
+    "medical_impact": 0.007956,
+    "reasoning_impact": 0.00194
+  },
+  {
+    "layer": 6,
+    "head": 16,
+    "medical_impact": 0.004032,
+    "reasoning_impact": 0.005762
+  },
+  {
+    "layer": 21,
+    "head": 18,
+    "medical_impact": 0.004948,
+    "reasoning_impact": 0.004837
+  },
+  {
+    "layer": 12,
+    "head": 22,
+    "medical_impact": 0.009232,
+    "reasoning_impact": 0.000552
+  },
+  {
+    "layer": 20,
+    "head": 10,
+    "medical_impact": 0.009036,
+    "reasoning_impact": 0.000705
+  },
+  {
+    "layer": 23,
+    "head": 30,
+    "medical_impact": 0.003473,
+    "reasoning_impact": 0.006221
+  },
+  {
+    "layer": 30,
+    "head": 17,
+    "medical_impact": 0.000394,
+    "reasoning_impact": 0.009278
+  },
+  {
+    "layer": 26,
+    "head": 4,
+    "medical_impact": 0.005542,
+    "reasoning_impact": 0.004051
+  },
+  {
+    "layer": 20,
+    "head": 14,
+    "medical_impact": 0.002322,
+    "reasoning_impact": 0.007266
+  },
+  {
+    "layer": 27,
+    "head": 17,
+    "medical_impact": 0.004547,
+    "reasoning_impact": 0.004991
+  },
+  {
+    "layer": 8,
+    "head": 30,
+    "medical_impact": 0.004188,
+    "reasoning_impact": 0.005313
+  },
+  {
+    "layer": 27,
+    "head": 20,
+    "medical_impact": 0.003953,
+    "reasoning_impact": 0.005491
+  },
+  {
+    "layer": 13,
+    "head": 8,
+    "medical_impact": 0.000119,
+    "reasoning_impact": 0.009323
+  },
+  {
+    "layer": 13,
+    "head": 10,
+    "medical_impact": 0.003081,
+    "reasoning_impact": 0.006284
+  },
+  {
+    "layer": 31,
+    "head": 5,
+    "medical_impact": 0.004206,
+    "reasoning_impact": 0.005125
+  },
+  {
+    "layer": 33,
+    "head": 25,
+    "medical_impact": 0.002295,
+    "reasoning_impact": 0.007023
+  },
+  {
+    "layer": 23,
+    "head": 0,
+    "medical_impact": 0.000757,
+    "reasoning_impact": 0.008543
+  },
+  {
+    "layer": 20,
+    "head": 24,
+    "medical_impact": 0.003014,
+    "reasoning_impact": 0.006278
+  },
+  {
+    "layer": 19,
+    "head": 28,
+    "medical_impact": 0.004747,
+    "reasoning_impact": 0.004511
+  },
+  {
+    "layer": 24,
+    "head": 27,
+    "medical_impact": 0.000453,
+    "reasoning_impact": 0.008754
+  },
+  {
+    "layer": 11,
+    "head": 25,
+    "medical_impact": 0.003637,
+    "reasoning_impact": 0.005517
+  },
+  {
+    "layer": 31,
+    "head": 3,
+    "medical_impact": 0.004739,
+    "reasoning_impact": 0.004376
+  },
+  {
+    "layer": 38,
+    "head": 3,
+    "medical_impact": 0.005741,
+    "reasoning_impact": 0.003359
+  },
+  {
+    "layer": 31,
+    "head": 19,
+    "medical_impact": 0.008936,
+    "reasoning_impact": 0.000143
+  },
+  {
+    "layer": 5,
+    "head": 3,
+    "medical_impact": 0.004731,
+    "reasoning_impact": 0.004249
+  },
+  {
+    "layer": 20,
+    "head": 9,
+    "medical_impact": 0.006275,
+    "reasoning_impact": 0.00266
+  },
+  {
+    "layer": 24,
+    "head": 16,
+    "medical_impact": 0.002295,
+    "reasoning_impact": 0.006624
+  },
+  {
+    "layer": 6,
+    "head": 1,
+    "medical_impact": 0.006547,
+    "reasoning_impact": 0.002315
+  },
+  {
+    "layer": 20,
+    "head": 22,
+    "medical_impact": 0.00352,
+    "reasoning_impact": 0.005224
+  },
+  {
+    "layer": 29,
+    "head": 10,
+    "medical_impact": 0.005943,
+    "reasoning_impact": 0.002796
+  },
+  {
+    "layer": 36,
+    "head": 10,
+    "medical_impact": 0.001924,
+    "reasoning_impact": 0.006802
+  },
+  {
+    "layer": 19,
+    "head": 10,
+    "medical_impact": 0.006934,
+    "reasoning_impact": 0.00179
+  },
+  {
+    "layer": 13,
+    "head": 3,
+    "medical_impact": 0.004267,
+    "reasoning_impact": 0.004419
+  },
+  {
+    "layer": 39,
+    "head": 9,
+    "medical_impact": 0.003568,
+    "reasoning_impact": 0.005118
+  },
+  {
+    "layer": 33,
+    "head": 18,
+    "medical_impact": 0.006935,
+    "reasoning_impact": 0.001749
+  },
+  {
+    "layer": 7,
+    "head": 6,
+    "medical_impact": 0.003374,
+    "reasoning_impact": 0.00527
+  },
+  {
+    "layer": 18,
+    "head": 19,
+    "medical_impact": 0.005322,
+    "reasoning_impact": 0.003229
+  },
+  {
+    "layer": 11,
+    "head": 13,
+    "medical_impact": 0.00386,
+    "reasoning_impact": 0.004598
+  },
+  {
+    "layer": 14,
+    "head": 9,
+    "medical_impact": 0.000685,
+    "reasoning_impact": 0.00767
+  },
+  {
+    "layer": 35,
+    "head": 19,
+    "medical_impact": 0.004889,
+    "reasoning_impact": 0.003437
+  },
+  {
+    "layer": 12,
+    "head": 31,
+    "medical_impact": 0.005404,
+    "reasoning_impact": 0.002836
+  },
+  {
+    "layer": 42,
+    "head": 11,
+    "medical_impact": 0.005211,
+    "reasoning_impact": 0.003028
+  },
+  {
+    "layer": 27,
+    "head": 28,
+    "medical_impact": 0.002652,
+    "reasoning_impact": 0.005558
+  },
+  {
+    "layer": 7,
+    "head": 25,
+    "medical_impact": 0.007865,
+    "reasoning_impact": 0.000336
+  },
+  {
+    "layer": 9,
+    "head": 13,
+    "medical_impact": 0.004452,
+    "reasoning_impact": 0.003695
+  },
+  {
+    "layer": 0,
+    "head": 20,
+    "medical_impact": 0.002027,
+    "reasoning_impact": 0.0061
+  },
+  {
+    "layer": 35,
+    "head": 26,
+    "medical_impact": 0.006557,
+    "reasoning_impact": 0.001534
+  },
+  {
+    "layer": 35,
+    "head": 25,
+    "medical_impact": 0.002452,
+    "reasoning_impact": 0.005537
+  },
+  {
+    "layer": 24,
+    "head": 19,
+    "medical_impact": 0.006149,
+    "reasoning_impact": 0.001804
+  },
+  {
+    "layer": 15,
+    "head": 26,
+    "medical_impact": 0.003948,
+    "reasoning_impact": 0.003979
+  },
+  {
+    "layer": 36,
+    "head": 21,
+    "medical_impact": 0.00341,
+    "reasoning_impact": 0.004477
+  },
+  {
+    "layer": 17,
+    "head": 9,
+    "medical_impact": 0.00185,
+    "reasoning_impact": 0.005985
+  },
+  {
+    "layer": 34,
+    "head": 11,
+    "medical_impact": 0.00459,
+    "reasoning_impact": 0.003187
+  },
+  {
+    "layer": 22,
+    "head": 15,
+    "medical_impact": 0.002989,
+    "reasoning_impact": 0.004786
+  },
+  {
+    "layer": 25,
+    "head": 16,
+    "medical_impact": 0.000375,
+    "reasoning_impact": 0.007351
+  },
+  {
+    "layer": 20,
+    "head": 5,
+    "medical_impact": 0.000984,
+    "reasoning_impact": 0.006685
+  },
+  {
+    "layer": 27,
+    "head": 0,
+    "medical_impact": 0.006156,
+    "reasoning_impact": 0.001391
+  },
+  {
+    "layer": 15,
+    "head": 5,
+    "medical_impact": 0.005999,
+    "reasoning_impact": 0.001345
+  },
+  {
+    "layer": 38,
+    "head": 18,
+    "medical_impact": 0.003273,
+    "reasoning_impact": 0.004065
+  },
+  {
+    "layer": 12,
+    "head": 17,
+    "medical_impact": 0.000678,
+    "reasoning_impact": 0.006651
+  },
+  {
+    "layer": 26,
+    "head": 8,
+    "medical_impact": 0.006113,
+    "reasoning_impact": 0.001214
+  },
+  {
+    "layer": 35,
+    "head": 2,
+    "medical_impact": 0.002656,
+    "reasoning_impact": 0.004656
+  },
+  {
+    "layer": 8,
+    "head": 14,
+    "medical_impact": 0.00211,
+    "reasoning_impact": 0.005198
+  },
+  {
+    "layer": 10,
+    "head": 27,
+    "medical_impact": 0.000117,
+    "reasoning_impact": 0.007086
+  },
+  {
+    "layer": 18,
+    "head": 10,
+    "medical_impact": 0.006722,
+    "reasoning_impact": 0.000481
+  },
+  {
+    "layer": 7,
+    "head": 21,
+    "medical_impact": 0.001212,
+    "reasoning_impact": 0.00596
+  },
+  {
+    "layer": 32,
+    "head": 31,
+    "medical_impact": 0.002207,
+    "reasoning_impact": 0.004894
+  },
+  {
+    "layer": 26,
+    "head": 20,
+    "medical_impact": 0.00565,
+    "reasoning_impact": 0.001446
+  },
+  {
+    "layer": 47,
+    "head": 5,
+    "medical_impact": 0.001137,
+    "reasoning_impact": 0.005959
+  },
+  {
+    "layer": 5,
+    "head": 11,
+    "medical_impact": 0.006308,
+    "reasoning_impact": 0.000728
+  },
+  {
+    "layer": 25,
+    "head": 28,
+    "medical_impact": 0.001749,
+    "reasoning_impact": 0.005241
+  },
+  {
+    "layer": 24,
+    "head": 18,
+    "medical_impact": 0.004031,
+    "reasoning_impact": 0.002954
+  },
+  {
+    "layer": 38,
+    "head": 16,
+    "medical_impact": 0.005648,
+    "reasoning_impact": 0.001314
+  },
+  {
+    "layer": 22,
+    "head": 30,
+    "medical_impact": 0.005856,
+    "reasoning_impact": 0.001096
+  },
+  {
+    "layer": 26,
+    "head": 1,
+    "medical_impact": 0.001034,
+    "reasoning_impact": 0.005862
+  },
+  {
+    "layer": 29,
+    "head": 24,
+    "medical_impact": 0.006431,
+    "reasoning_impact": 0.000301
+  },
+  {
+    "layer": 6,
+    "head": 31,
+    "medical_impact": 0.006416,
+    "reasoning_impact": 0.000253
+  },
+  {
+    "layer": 22,
+    "head": 3,
+    "medical_impact": 8.4e-05,
+    "reasoning_impact": 0.006549
+  },
+  {
+    "layer": 24,
+    "head": 23,
+    "medical_impact": 0.002715,
+    "reasoning_impact": 0.003853
+  },
+  {
+    "layer": 32,
+    "head": 27,
+    "medical_impact": 0.001308,
+    "reasoning_impact": 0.005186
+  },
+  {
+    "layer": 34,
+    "head": 22,
+    "medical_impact": 0.005394,
+    "reasoning_impact": 0.001016
+  },
+  {
+    "layer": 21,
+    "head": 7,
+    "medical_impact": 0.001153,
+    "reasoning_impact": 0.005189
+  },
+  {
+    "layer": 35,
+    "head": 29,
+    "medical_impact": 0.003794,
+    "reasoning_impact": 0.002522
+  },
+  {
+    "layer": 22,
+    "head": 6,
+    "medical_impact": 0.001031,
+    "reasoning_impact": 0.005278
+  },
+  {
+    "layer": 24,
+    "head": 25,
+    "medical_impact": 0.004292,
+    "reasoning_impact": 0.001983
+  },
+  {
+    "layer": 14,
+    "head": 1,
+    "medical_impact": 0.005842,
+    "reasoning_impact": 0.000392
+  },
+  {
+    "layer": 32,
+    "head": 9,
+    "medical_impact": 0.004658,
+    "reasoning_impact": 0.001514
+  },
+  {
+    "layer": 30,
+    "head": 12,
+    "medical_impact": 0.002254,
+    "reasoning_impact": 0.003904
+  },
+  {
+    "layer": 28,
+    "head": 25,
+    "medical_impact": 0.005269,
+    "reasoning_impact": 0.000886
+  },
+  {
+    "layer": 19,
+    "head": 5,
+    "medical_impact": 0.003011,
+    "reasoning_impact": 0.003128
+  },
+  {
+    "layer": 18,
+    "head": 2,
+    "medical_impact": 0.00239,
+    "reasoning_impact": 0.003735
+  },
+  {
+    "layer": 31,
+    "head": 26,
+    "medical_impact": 0.002117,
+    "reasoning_impact": 0.003978
+  },
+  {
+    "layer": 36,
+    "head": 11,
+    "medical_impact": 0.003296,
+    "reasoning_impact": 0.002708
+  },
+  {
+    "layer": 33,
+    "head": 21,
+    "medical_impact": 0.001832,
+    "reasoning_impact": 0.004145
+  },
+  {
+    "layer": 37,
+    "head": 12,
+    "medical_impact": 0.000729,
+    "reasoning_impact": 0.005226
+  },
+  {
+    "layer": 26,
+    "head": 12,
+    "medical_impact": 0.000675,
+    "reasoning_impact": 0.005237
+  },
+  {
+    "layer": 37,
+    "head": 29,
+    "medical_impact": 0.002438,
+    "reasoning_impact": 0.0034
+  },
+  {
+    "layer": 40,
+    "head": 25,
+    "medical_impact": 0.005207,
+    "reasoning_impact": 0.000628
+  },
+  {
+    "layer": 13,
+    "head": 1,
+    "medical_impact": 0.003949,
+    "reasoning_impact": 0.001881
+  },
+  {
+    "layer": 32,
+    "head": 20,
+    "medical_impact": 0.003321,
+    "reasoning_impact": 0.002456
+  },
+  {
+    "layer": 41,
+    "head": 6,
+    "medical_impact": 0.000654,
+    "reasoning_impact": 0.005103
+  },
+  {
+    "layer": 34,
+    "head": 12,
+    "medical_impact": 0.000117,
+    "reasoning_impact": 0.005635
+  },
+  {
+    "layer": 15,
+    "head": 23,
+    "medical_impact": 0.000932,
+    "reasoning_impact": 0.00482
+  },
+  {
+    "layer": 22,
+    "head": 16,
+    "medical_impact": 0.001949,
+    "reasoning_impact": 0.003787
+  },
+  {
+    "layer": 20,
+    "head": 2,
+    "medical_impact": 0.002048,
+    "reasoning_impact": 0.00368
+  },
+  {
+    "layer": 26,
+    "head": 25,
+    "medical_impact": 0.002579,
+    "reasoning_impact": 0.003138
+  },
+  {
+    "layer": 0,
+    "head": 8,
+    "medical_impact": 0.002288,
+    "reasoning_impact": 0.003347
+  },
+  {
+    "layer": 41,
+    "head": 9,
+    "medical_impact": 0.001934,
+    "reasoning_impact": 0.003683
+  },
+  {
+    "layer": 30,
+    "head": 7,
+    "medical_impact": 0.003712,
+    "reasoning_impact": 0.001863
+  },
+  {
+    "layer": 12,
+    "head": 11,
+    "medical_impact": 0.000621,
+    "reasoning_impact": 0.004942
+  },
+  {
+    "layer": 30,
+    "head": 31,
+    "medical_impact": 0.001719,
+    "reasoning_impact": 0.003835
+  },
+  {
+    "layer": 24,
+    "head": 13,
+    "medical_impact": 0.0038,
+    "reasoning_impact": 0.001753
+  },
+  {
+    "layer": 7,
+    "head": 27,
+    "medical_impact": 0.00472,
+    "reasoning_impact": 0.000832
+  },
+  {
+    "layer": 28,
+    "head": 19,
+    "medical_impact": 0.000706,
+    "reasoning_impact": 0.004669
+  },
+  {
+    "layer": 34,
+    "head": 7,
+    "medical_impact": 0.000451,
+    "reasoning_impact": 0.004843
+  },
+  {
+    "layer": 31,
+    "head": 25,
+    "medical_impact": 0.005227,
+    "reasoning_impact": 2.3e-05
+  },
+  {
+    "layer": 17,
+    "head": 29,
+    "medical_impact": 0.002088,
+    "reasoning_impact": 0.003109
+  },
+  {
+    "layer": 28,
+    "head": 11,
+    "medical_impact": 0.004009,
+    "reasoning_impact": 0.001125
+  },
+  {
+    "layer": 36,
+    "head": 12,
+    "medical_impact": 0.00237,
+    "reasoning_impact": 0.002725
+  },
+  {
+    "layer": 37,
+    "head": 3,
+    "medical_impact": 0.001062,
+    "reasoning_impact": 0.00403
+  },
+  {
+    "layer": 23,
+    "head": 5,
+    "medical_impact": 0.005012,
+    "reasoning_impact": 5.1e-05
+  },
+  {
+    "layer": 1,
+    "head": 30,
+    "medical_impact": 0.004615,
+    "reasoning_impact": 0.000247
+  },
+  {
+    "layer": 22,
+    "head": 19,
+    "medical_impact": 0.000175,
+    "reasoning_impact": 0.004615
+  },
+  {
+    "layer": 9,
+    "head": 22,
+    "medical_impact": 0.00318,
+    "reasoning_impact": 0.001601
+  },
+  {
+    "layer": 38,
+    "head": 11,
+    "medical_impact": 0.002024,
+    "reasoning_impact": 0.002643
+  },
+  {
+    "layer": 11,
+    "head": 30,
+    "medical_impact": 0.000883,
+    "reasoning_impact": 0.003778
+  },
+  {
+    "layer": 25,
+    "head": 6,
+    "medical_impact": 0.002543,
+    "reasoning_impact": 0.002088
+  },
+  {
+    "layer": 35,
+    "head": 9,
+    "medical_impact": 0.001506,
+    "reasoning_impact": 0.003102
+  },
+  {
+    "layer": 31,
+    "head": 10,
+    "medical_impact": 0.002927,
+    "reasoning_impact": 0.001657
+  },
+  {
+    "layer": 25,
+    "head": 1,
+    "medical_impact": 0.004525,
+    "reasoning_impact": 5.4e-05
+  },
+  {
+    "layer": 7,
+    "head": 3,
+    "medical_impact": 0.004507,
+    "reasoning_impact": 1e-05
+  },
+  {
+    "layer": 30,
+    "head": 26,
+    "medical_impact": 0.000533,
+    "reasoning_impact": 0.00396
+  },
+  {
+    "layer": 39,
+    "head": 21,
+    "medical_impact": 0.004079,
+    "reasoning_impact": 0.000411
+  },
+  {
+    "layer": 41,
+    "head": 21,
+    "medical_impact": 0.000647,
+    "reasoning_impact": 0.003785
+  },
+  {
+    "layer": 24,
+    "head": 9,
+    "medical_impact": 0.000868,
+    "reasoning_impact": 0.003524
+  },
+  {
+    "layer": 39,
+    "head": 22,
+    "medical_impact": 0.003901,
+    "reasoning_impact": 0.000454
+  },
+  {
+    "layer": 11,
+    "head": 31,
+    "medical_impact": 0.003416,
+    "reasoning_impact": 0.000929
+  },
+  {
+    "layer": 46,
+    "head": 13,
+    "medical_impact": 0.002038,
+    "reasoning_impact": 0.002256
+  },
+  {
+    "layer": 40,
+    "head": 14,
+    "medical_impact": 0.002943,
+    "reasoning_impact": 0.001326
+  },
+  {
+    "layer": 27,
+    "head": 13,
+    "medical_impact": 0.003206,
+    "reasoning_impact": 0.001024
+  },
+  {
+    "layer": 33,
+    "head": 1,
+    "medical_impact": 0.000111,
+    "reasoning_impact": 0.004006
+  },
+  {
+    "layer": 20,
+    "head": 12,
+    "medical_impact": 0.000186,
+    "reasoning_impact": 0.003873
+  },
+  {
+    "layer": 30,
+    "head": 20,
+    "medical_impact": 0.002056,
+    "reasoning_impact": 0.00197
+  },
+  {
+    "layer": 22,
+    "head": 29,
+    "medical_impact": 0.000676,
+    "reasoning_impact": 0.0033
+  },
+  {
+    "layer": 16,
+    "head": 18,
+    "medical_impact": 0.002276,
+    "reasoning_impact": 0.001596
+  },
+  {
+    "layer": 24,
+    "head": 6,
+    "medical_impact": 0.001127,
+    "reasoning_impact": 0.002731
+  },
+  {
+    "layer": 3,
+    "head": 31,
+    "medical_impact": 0.003369,
+    "reasoning_impact": 0.000475
+  },
+  {
+    "layer": 4,
+    "head": 15,
+    "medical_impact": 0.001415,
+    "reasoning_impact": 0.002426
+  },
+  {
+    "layer": 5,
+    "head": 29,
+    "medical_impact": 0.000941,
+    "reasoning_impact": 0.002887
+  },
+  {
+    "layer": 7,
+    "head": 4,
+    "medical_impact": 0.001268,
+    "reasoning_impact": 0.002505
+  },
+  {
+    "layer": 0,
+    "head": 25,
+    "medical_impact": 0.000595,
+    "reasoning_impact": 0.003125
+  },
+  {
+    "layer": 25,
+    "head": 4,
+    "medical_impact": 0.001612,
+    "reasoning_impact": 0.002063
+  },
+  {
+    "layer": 31,
+    "head": 13,
+    "medical_impact": 0.003074,
+    "reasoning_impact": 0.000586
+  },
+  {
+    "layer": 38,
+    "head": 14,
+    "medical_impact": 0.000903,
+    "reasoning_impact": 0.002753
+  },
+  {
+    "layer": 7,
+    "head": 0,
+    "medical_impact": 0.003075,
+    "reasoning_impact": 0.000565
+  },
+  {
+    "layer": 37,
+    "head": 21,
+    "medical_impact": 0.000846,
+    "reasoning_impact": 0.002772
+  },
+  {
+    "layer": 30,
+    "head": 9,
+    "medical_impact": 0.002193,
+    "reasoning_impact": 0.001386
+  },
+  {
+    "layer": 18,
+    "head": 20,
+    "medical_impact": 0.000937,
+    "reasoning_impact": 0.002614
+  },
+  {
+    "layer": 46,
+    "head": 30,
+    "medical_impact": 0.001782,
+    "reasoning_impact": 0.001601
+  },
+  {
+    "layer": 7,
+    "head": 26,
+    "medical_impact": 0.002022,
+    "reasoning_impact": 0.001309
+  },
+  {
+    "layer": 14,
+    "head": 24,
+    "medical_impact": 0.002358,
+    "reasoning_impact": 0.000799
+  },
+  {
+    "layer": 14,
+    "head": 25,
+    "medical_impact": 0.001792,
+    "reasoning_impact": 0.001096
+  },
+  {
+    "layer": 37,
+    "head": 23,
+    "medical_impact": 0.002229,
+    "reasoning_impact": 0.000496
+  },
+  {
+    "layer": 14,
+    "head": 30,
+    "medical_impact": 0.001342,
+    "reasoning_impact": 0.001377
+  },
+  {
+    "layer": 19,
+    "head": 0,
+    "medical_impact": 0.001618,
+    "reasoning_impact": 0.001005
+  },
+  {
+    "layer": 42,
+    "head": 20,
+    "medical_impact": 2.5e-05,
+    "reasoning_impact": 0.002554
+  },
+  {
+    "layer": 27,
+    "head": 22,
+    "medical_impact": 0.001457,
+    "reasoning_impact": 0.001094
+  },
+  {
+    "layer": 35,
+    "head": 0,
+    "medical_impact": 0.000968,
+    "reasoning_impact": 0.001325
+  },
+  {
+    "layer": 5,
+    "head": 14,
+    "medical_impact": 3.7e-05,
+    "reasoning_impact": 0.002199
+  },
+  {
+    "layer": 21,
+    "head": 26,
+    "medical_impact": 0.000108,
+    "reasoning_impact": 0.002042
+  },
+  {
+    "layer": 30,
+    "head": 10,
+    "medical_impact": 0.001195,
+    "reasoning_impact": 0.000802
+  },
+  {
+    "layer": 25,
+    "head": 7,
+    "medical_impact": 0.000506,
+    "reasoning_impact": 0.001431
+  },
+  {
+    "layer": 39,
+    "head": 24,
+    "medical_impact": 0.001209,
+    "reasoning_impact": 0.000261
+  },
+  {
+    "layer": 13,
+    "head": 9,
+    "medical_impact": 7.2e-05,
+    "reasoning_impact": 0.001346
+  },
+  {
+    "layer": 23,
+    "head": 12,
+    "medical_impact": 0.000703,
+    "reasoning_impact": 0.000663
+  },
+  {
+    "layer": 37,
+    "head": 16,
+    "medical_impact": 0.000715,
+    "reasoning_impact": 0.00057
+  },
+  {
+    "layer": 30,
+    "head": 2,
+    "medical_impact": 0.000964,
+    "reasoning_impact": 2.9e-05
+  },
+  {
+    "layer": 21,
+    "head": 12,
+    "medical_impact": 0.000323,
+    "reasoning_impact": 0.000449
+  },
+  {
+    "layer": 24,
+    "head": 24,
+    "medical_impact": 0.000234,
+    "reasoning_impact": 0.000295
+  }
+]
