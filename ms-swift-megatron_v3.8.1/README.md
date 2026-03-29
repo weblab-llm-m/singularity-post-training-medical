@@ -267,3 +267,607 @@ bash merge_megatron_hf.sh
 ```bash
 sbatch merge_megatron_hf_auto.sh
 ```
+
+## 5.SFT実行
+## 実行ファイル
+
+```bash
+
+(1)マルチノード用
+sft_multinode.sh 　　　　：　マルチノードのsingularityを起動するスクリプト
+sft_multinode_exec.sh　　：　マルチノード用のSFTパラメータ設定コードのスクリプト
+
+(2)シングルノード用
+sft_singlenode.sh 　　　　：　シングルノードのsingularityを起動するスクリプト
+sft_singlenode_exec.sh　　：　シングルノード用のSFTパラメータ設定コードのスクリプト
+```
+
+## マルチノード用
+
+①singularity-post-training-medicalのsftに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/post-training/sft
+```
+
+②「sft_multinode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=sft_megatron_multinode
+#SBATCH --partition=xxxx
+#SBATCH --nodelist=xxx[xx-xx]
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=4
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home （singularityのイメージパス）/ms-swift-megatron_v3.8.1 \
+bash sft_multinode_exec.sh ${MODEL} ${MASTER_PORT}
+```
+
+③「sft_multinode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
+    --load ${MODEL} \
+    --dataset 'team-suzuki/SFT_006_origin_1' \
+    --split_dataset_ratio 0.01 \
+    --train_type lora \
+    --lazy_tokenize true \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --tensor_model_parallel_size 2 \
+    --pipeline_model_parallel_size 2 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-3 \
+    --moe_expert_capacity_factor 1.0 \
+    --moe_token_dispatcher_type alltoall \
+    --sequence_parallel true \
+    --micro_batch_size 4 \
+    --global_batch_size 32 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 1e-4 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-5 \
+    --max_epochs 1 \
+    --save megatron_output/multinode/${MODEL} \
+    --eval_interval 200 \
+    --save_interval 400 \
+    --max_length 16384 \
+    --num_workers 8 \
+    --dataset_num_proc 8 \
+    --no_save_optim true \
+    --no_save_rng true \
+    --attention_backend flash \
+    --wandb_exp_name sft_4node_16k \
+    --wandb_project sft_megatron_235B \
+    --wandb_save_dir wandb_logs
+```
+
+④logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑤以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch sft_multinode.sh　(追加学習対象モデル)
+```
+
+## シングルノード用
+
+①singularity-post-training-medicalのsftに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/post-training/sft
+```
+
+②「sft_singlenode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=sft_megatron_multinode
+#SBATCH --partition=xxxx
+#SBATCH --nodelist=xxxx
+#SBATCH --nodes=1
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=1
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1 \
+bash sft_singlenode_exec.sh ${MODEL} ${MASTER_PORT}
+```
+
+③「sft_singlenode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
+    --load ${MODEL} \
+    --dataset 'team-suzuki/SFT_006_origin_1' \　←学習データを設定する
+    --split_dataset_ratio 0.01 \
+    --train_type lora \
+    --lazy_tokenize true \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --expert_model_parallel_size 8 \
+    --sequence_parallel true \
+    --micro_batch_size 1 \
+    --global_batch_size 16 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 1e-4 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-5 \
+    --max_epochs 1 \
+    --save megatron_output/multinode/${MODEL} \
+    --eval_interval 200 \
+    --save_interval 200 \
+    --max_length 16384 \
+    --num_workers 8 \
+    --dataset_num_proc 8 \
+    --no_save_optim true \
+    --no_save_rng true \
+    --attention_backend flash \
+    --wandb_exp_name test_multinode \
+    --wandb_project sft_megatron \
+    --wandb_save_dir wandb_logs
+```
+
+④logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑤以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch sft_singlenode.sh　(追加学習対象モデル)
+```
+
+## 6.DPO実行
+## 実行ファイル
+
+```bash
+
+(1)マルチノード用
+dpo_multinode.sh 　　　　：　マルチノードのsingularityを起動するスクリプト
+dpo_multinode_exec.sh　　：　マルチノード用のDPOパラメータ設定コードのスクリプト
+
+(2)シングルノード用
+dpo_singlenode.sh 　　　　：　シングルノードのsingularityを起動するスクリプト
+dpo_singlenode_exec.sh　　：　シングルノード用のDPOパラメータ設定コードのスクリプト
+```
+
+## マルチノード用
+
+①singularity-post-training-medicalのdpoに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/post-training/dpo
+```
+
+②「dpo_multinode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=sft_megatron_multinode
+#SBATCH --partition=xxxxx
+#SBATCH --nodelist=xxxx[xx-xx]
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=4
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1 \
+bash dpo_multinode_exec.sh ${MODEL} ${MASTER_PORT}
+```
+
+④「dpo_multinode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1 MASTER_PORT=${MASTER_PORT} megatron rlhf \
+    --rlhf_type dpo \
+    --load ${MODEL} \
+    --dataset team-suzuki/DPO_006_1_withloop \
+    --train_type lora \
+    --lora_rank 16 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --split_dataset_ratio 0.05 \
+    --tensor_model_parallel_size 2 \
+    --pipeline_model_parallel_size 2 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-3 \
+    --micro_batch_size 1 \
+    --global_batch_size 32 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --max_epochs 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 5e-5 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-6 \
+    --save megatron_output/dpo/Qwen3-235B-A22B-Thinking-2507/006_1_withloop \
+    --eval_interval 100 \
+    --save_interval 400 \
+    --max_length 16384 \
+    --num_workers 4 \
+    --dataset_num_proc 4 \
+    --truncation_strategy right \
+    --no_save_optim true \
+    --no_save_rng true \
+    --sequence_parallel true \
+    --attention_backend flash \
+    --beta 0.1 \
+    --loss_type sigmoid \
+    --loss_scale ignore_empty_think \
+    --wandb_exp_name 006_1_withloop \
+    --wandb_project dpo_235b \
+    --wandb_save_dir wandb_logs
+```
+
+⑤logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑥以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch dpo_multinode.sh　(追加学習対象モデル)
+```
+
+## シングルノード用
+
+①singularity-post-training-medicalのsftに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/post-training/dpo
+```
+
+②「dpo_singlenode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=dpo_megatron_multinode
+#SBATCH --partition=xxxxxx
+#SBATCH --nodelist=xxxxx
+#SBATCH --nodes=1
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=1
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1 \
+bash dpo_singlenode_exec.sh ${MODEL} ${MASTER_PORT}
+```
+
+③「dpo_singlenode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1 MASTER_PORT=${MASTER_PORT} megatron rlhf \
+    --rlhf_type dpo \
+    --load ${MODEL} \
+    --dataset team-suzuki/DPO_006_1 \
+    --columns '{"chosen":"messages","rejected":"rejected_messages"}' \
+    --train_type lora \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --split_dataset_ratio 0.1 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-3 \
+    --micro_batch_size 2 \
+    --global_batch_size 32 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --max_epochs 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 1e-4 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-5 \
+    --save megatron_output/dpo/Qwen3-30B-A3B-Thinking-2507/006_1 \
+    --eval_interval 100 \
+    --save_interval 400 \
+    --max_length 16384 \
+    --num_workers 8 \
+    --dataset_num_proc 8 \
+    --truncation_strategy right \
+    --no_save_optim true \
+    --no_save_rng true \
+    --sequence_parallel true \
+    --attention_backend flash \
+    --beta 0.1 \
+    --loss_type sigmoid \
+    --loss_scale ignore_empty_think \
+    --wandb_exp_name 006_1 \
+    --wandb_project dpo_30b \
+    --wandb_save_dir wandb_logs
+```
+
+④logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑤以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch dpo_singlenode.sh (追加学習対象モデル)
+```
+
+## 7.DFT実行
+## 実行ファイル
+
+```bash
+
+(1)マルチノード用
+dft_multinode.sh 　　　　：　マルチノードのsingularityを起動するスクリプト
+dft_multinode_exec.sh　　：　マルチノード用のDFTパラメータ設定コードのスクリプト
+
+(2)シングルノード用
+dft_singlenode.sh 　　　　：　シングルノードのsingularityを起動するスクリプト
+dft_singlenode_exec.sh　　：　シングルノード用のDFTパラメータ設定コードのスクリプト
+```
+
+## マルチノード用
+
+①singularity-post-training-medicalのdftに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/post-training/dft
+```
+
+②「dft_multinode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=dft_megatron_multinode_1
+#SBATCH --partition=xxxxxx
+#SBATCH --nodelist=xxxx[xx-xx]
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=4
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1 \
+bash dft_multinode_exec.sh (追加学習対象モデル)
+```
+
+④「dft_multinode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
+    --load ${MODEL} \
+    --dataset team-suzuki/DFT_235B-Thinking_006_origin_1 \
+    --split_dataset_ratio 0.01 \
+    --train_type lora \
+    --lazy_tokenize true \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --tensor_model_parallel_size 2 \
+    --pipeline_model_parallel_size 2 \
+    --expert_model_parallel_size 4 \
+    --context_parallel_size 2 \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-3 \
+    --moe_expert_capacity_factor 1.0 \
+    --moe_token_dispatcher_type alltoall \
+    --sequence_parallel true \
+    --micro_batch_size 1 \
+    --global_batch_size 16 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 2e-5 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-5 \
+    --max_epochs 1 \
+    --save megatron_output/multinode/${MODEL} \
+    --eval_interval 200 \
+    --save_interval 200 \
+    --max_length 16384 \
+    --num_workers 8 \
+    --dataset_num_proc 8 \
+    --no_save_optim true \
+    --no_save_rng true \
+    --attention_backend flash \
+    --wandb_exp_name dft_4node \
+    --wandb_project dft_megatron \
+    --enable_dft_loss true \
+    --wandb_save_dir wandb_logs
+```
+
+⑤logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑥以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch dft_multinode.sh　(追加学習対象モデル)
+```
+
+## シングルノード用
+
+①singularity-post-training-medicalのsftに移動する
+
+```bash
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/dft
+```
+
+②「dft_singlenode.sh」を編集する
+
+```bash
+#編集の抜粋
+#!/bin/bash
+#SBATCH --job-name=sft_megatron_multinode
+#SBATCH --partition=xxxxx
+#SBATCH --nodelist=xxxx
+#SBATCH --nodes=1
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=128
+#SBATCH --time=40:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+-------------------------------------------------------
+export NNODES=1
+export NPROC_PER_NODE=8
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+-------------------------------------------------------
+
+# singularityのパスを編集する
+srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1 \
+bash dft_singlenode_exec.sh ${MODEL} ${MASTER_PORT}
+```
+
+③「dft_singlenode_exec.sh」を編集する
+
+```bash
+#該当するパラメータを修正する
+USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
+    --load ${MODEL} \
+    --dataset team-suzuki/DFT_235B-Thinking_006_origin_1 \
+    --split_dataset_ratio 0.01 \
+    --enable_dft_loss true \
+    --train_type lora \
+    --lazy_tokenize true \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --target_modules all-linear \
+    --expert_model_parallel_size 8 \
+    --sequence_parallel true \
+    --micro_batch_size 1 \
+    --global_batch_size 16 \
+    --recompute_granularity full \
+    --recompute_method uniform \
+    --recompute_num_layers 1 \
+    --finetune true \
+    --cross_entropy_loss_fusion true \
+    --lr 1e-4 \
+    --lr_warmup_fraction 0.05 \
+    --min_lr 1e-5 \
+    --max_epochs 1 \
+    --save megatron_output/multinode/${MODEL} \
+    --eval_interval 200 \
+    --save_interval 200 \
+    --max_length 2048 \
+    --num_workers 8 \
+    --dataset_num_proc 8 \
+    --no_save_optim true \
+    --no_save_rng true \
+    --attention_backend flash \
+    --wandb_exp_name test_multinode \
+    --wandb_project sft_megatron_30b \
+    --wandb_save_dir wandb_logs
+```
+
+④logsディレクトリを作成する
+
+```bash
+mkdir -p (logsディレクトリ)
+```
+
+⑤以下のスクリプト実行させて、モデル学習を開始する
+
+```bash
+sbatch dft_singlenode.sh　(追加学習対象モデル)
+```
