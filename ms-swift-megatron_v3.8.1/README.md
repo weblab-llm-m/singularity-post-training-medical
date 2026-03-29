@@ -1,4 +1,4 @@
-# singularity-post-training-medical
+# ms-swift3.8.1 singularity
 
 ms-swift3.8.1のsingularityの実験コードおよびテンプレートを提供します。  
 実験管理のため、一定のディレクトリ構造や命名規則に従って構成されています。
@@ -121,9 +121,9 @@ srun --partition=xxxxx --nodelist=xxx-gpuxx  --gres=gpu:8 --nodes=1 --time=03:00
 ②singularityに入る
 
 ```bash
-singularity shell -w --nv -B /home (②singularityに入るパス)/ms-swift-megatron_v3.8.1
+singularity shell -w --nv -B /home (singularityのイメージパス)/ms-swift-megatron_v3.8.1
 ```
-②megatronの変換スクリプト(megatron_export.sh)を実行する
+③megatronの変換スクリプト(megatron_export.sh)を実行する
 
 ```bash
 bash megatron_export.sh
@@ -149,7 +149,7 @@ merge_full_megatron_hf.sh　：　全量のHF形式変換用手動スクリプ�
 ①singularity-post-training-medicalに移動する
 
 ```bash
-cd (singularity-post-training-medicalのパス)/singularity-post-training-medical
+cd (singularity-post-training-medicalのパス)/singularity-post-training-medical/megatron-Huggingface
 ```
 
 ②全量のHF形式変換用手動スクリプト(merge_full_megatron_hf.sh)を編集する
@@ -185,7 +185,7 @@ srun --partition=xxxx --nodelist=xxx-gpuxx  --gres=gpu:8 --nodes=1 --time=03:00:
 ②singularityに入る
 
 ```bash
-singularity shell -w --nv -B /home /home/matsuolab/nishimae/singularity/ms-swift-megatron_v3.8.1
+singularity shell -w --nv -B /home (singularityのイメージパス）/ms-swift-megatron_v3.8.1
 ```
 
 ③全量のHF形式変換用手動スクリプト(merge_full_megatron_hf.sh)を実行する
@@ -514,7 +514,7 @@ srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w 
 bash dpo_multinode_exec.sh ${MODEL} ${MASTER_PORT}
 ```
 
-④「dpo_multinode_exec.sh」を編集する
+③「dpo_multinode_exec.sh」を編集する
 
 ```bash
 #該当するパラメータを修正する
@@ -565,7 +565,7 @@ USE_HF=1 MASTER_PORT=${MASTER_PORT} megatron rlhf \
     --wandb_save_dir wandb_logs
 ```
 
-⑤logsディレクトリを作成する
+④logsディレクトリを作成する
 
 ```bash
 mkdir -p (logsディレクトリ)
@@ -723,7 +723,7 @@ srun --jobid $SLURM_JOBID --gpus-per-node=${NPROC_PER_NODE}  singularity run -w 
 bash dft_multinode_exec.sh (追加学習対象モデル)
 ```
 
-④「dft_multinode_exec.sh」を編集する
+③「dft_multinode_exec.sh」を編集する
 
 ```bash
 #該当するパラメータを修正する
@@ -773,13 +773,13 @@ USE_HF=1  MASTER_PORT=${MASTER_PORT} megatron sft \
     --wandb_save_dir wandb_logs
 ```
 
-⑤logsディレクトリを作成する
+④logsディレクトリを作成する
 
 ```bash
 mkdir -p (logsディレクトリ)
 ```
 
-⑥以下のスクリプト実行させて、モデル学習を開始する
+⑤以下のスクリプト実行させて、モデル学習を開始する
 
 ```bash
 sbatch dft_multinode.sh　(追加学習対象モデル)
