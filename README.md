@@ -54,3 +54,15 @@ singularity-post-training-medical/
 | Pinpoint (Neg) | SFT | 79.2% (−7.0) | 48.2% (−12.7) | p<0.000001 *** |
 
 詳細な分析結果は [outputs/ANALYSIS_REPORT.md](outputs/ANALYSIS_REPORT.md) を参照。
+
+## 免責事項
+
+本リポジトリは研究目的で公開しています。内容の正確性や完全性について保証するものではありません。本リポジトリに含まれるコード・学習済みモデル・データの利用によって生じたいかなる損害についても、作成者は一切の責任を負いません。また、動作に関する不具合や修正依頼に応じることはできません。
+
+本リポジトリで公開している学習済みモデルは医療ドメインを対象とした事後学習の研究成果であり、臨床診断・治療判断など医療現場での実利用を意図したものではありません。
+
+## 謝辞
+
+本研究は、NEDO（国立研究開発法人新エネルギー・産業技術総合開発機構）「AIの安全性確保に関する研究開発・検証等の推進事業 / 日本語版医療特化型LLMの社会実装に向けた安全性検証・実証」の支援を受けて実施されました。
+
+This paper is based on results obtained from a project, JPNP25006, commissioned by the New Energy and Industrial Technology Development Organization (NEDO).
