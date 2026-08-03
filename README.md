@@ -63,6 +63,29 @@ singularity-post-training-medical/
 
 ## 謝辞
 
-本研究は、NEDO（国立研究開発法人新エネルギー・産業技術総合開発機構）「AIの安全性確保に関する研究開発・検証等の推進事業 / 日本語版医療特化型LLMの社会実装に向けた安全性検証・実証」の支援を受けて実施されました。
+この成果は、NEDO（国立研究開発法人新エネルギー・産業技術総合開発機構）の 委託業務（JPNP25006）の結果得られたものです。
 
 This paper is based on results obtained from a project, JPNP25006, commissioned by the New Energy and Industrial Technology Development Organization (NEDO).
+
+## References
+
+本リポジトリの実装で参考にした論文・フレームワークを以下に示す。コードの直接借用は行っておらず、いずれもアイデア・アルゴリズム・API仕様の参照である。
+
+### Papers（手法）
+
+| 手法 | 論文 |
+|------|------|
+| GRPO | Shao et al. (2024) *DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models*. [arXiv:2402.03300](https://arxiv.org/abs/2402.03300) |
+| GSPO | Zheng et al. (2025) *Group Sequence Policy Optimization*. [arXiv:2507.18071](https://arxiv.org/abs/2507.18071) |
+| CHORD | Xie et al. (2025) *On-Policy RL Meets Off-Policy Experts: Harmonizing Supervised Fine-Tuning and Reinforcement Learning via Dynamic Weighting*. [arXiv:2508.11408](https://arxiv.org/abs/2508.11408) |
+| Path Patching | Wang et al. (2022) *Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small*. [arXiv:2211.00593](https://arxiv.org/abs/2211.00593) |
+| Pinpoint Tuning | Chen et al. (2024) *From Yes-Men to Truth-Tellers: Addressing Sycophancy in Large Language Models*. [arXiv:2409.01658](https://arxiv.org/abs/2409.01658) |
+| Path Patching メトリクス設計（counterfactual設計・impactメトリクス） | Zhang et al. (2025) *Exploring Translation Mechanism of Large Language Models*. [arXiv:2502.11806](https://arxiv.org/abs/2502.11806) |
+
+### Frameworks / Implementations（実装土台・参考実装）
+
+| リポジトリ | ライセンス | 用途 |
+|------------|-----------|------|
+| [modelscope/ms-swift](https://github.com/modelscope/ms-swift) | Apache-2.0 | 事後学習フレームワーク本体（GRPO/GSPO/CHORDのplugin実装土台） |
+| [NVIDIA/Megatron-LM](https://github.com/NVIDIA/Megatron-LM) | BSD-3-Clause系 | Megatron backend（公式イメージを未改変で使用） |
+| [agentscope-ai/Trinity-RFT](https://github.com/agentscope-ai/Trinity-RFT) ([examples/mix_chord](https://github.com/agentscope-ai/Trinity-RFT/tree/main/examples/mix_chord)) | Apache-2.0 | CHORD原著者らによる公式実装。パラメータ命名・デフォルト値の参照元 |
