@@ -67,7 +67,7 @@ Ramen Team
 
 詳細な分析結果は [outputs/ANALYSIS_REPORT.md](outputs/ANALYSIS_REPORT.md) を参照。
 
-医療PJ Team
+医療PJ Team  
 以下に主要ベンチマークの性能を示します。括弧内はベースモデルからの変化幅です。
 
 | モデル | 医師国試 | ガイドライン |
