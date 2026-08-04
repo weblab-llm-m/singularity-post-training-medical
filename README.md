@@ -1,16 +1,19 @@
 # singularity-post-training-medical
 
-本リポジトリは、NEDO（国立研究開発法人新エネルギー・産業技術総合開発機構）「AIの安全性確保に関する研究開発・検証等の推進事業 / 日本語版医療特化型LLMの社会実装に向けた安全性検証・実証」において開発された医療特化型大規模言語モデルに関する、東京大学開発チーム内の **Ramen Team** による事後学習（Post-Training）手法の実験コード・分析パイプライン一式です。
+本リポジトリは、NEDO（国立研究開発法人新エネルギー・産業技術総合開発機構）「AIの安全性確保に関する研究開発・検証等の推進事業 / 日本語版医療特化型LLMの社会実装に向けた安全性検証・実証」において開発された医療特化型大規模言語モデルに関する、東京大学開発チーム内の **Ramen Team** または **医療PJ Team** による事後学習（Post-Training）手法の実験コード・分析パイプライン一式です。
 
 ## 概要
 
-以下の2系統のアプローチを実装・実験・評価した。
-
+Ramen Teamとしては、以下の3系統のアプローチを実装・実験・評価した。
 1. **RL系手法**（GRPO / GSPO / CHORD）：Qwen3-Next-80B-A3B-Instruct に対する強化学習ベースの事後学習
 2. **Pinpoint Tuning**：Qwen3-30B-A3B-Instruct-2507 に対し、Path Patching法でAttention Headの影響度を分析し、選択的にFine-tuneする手法
 
+医療PJ Teamsとしては、以下の系統のアプローチを実装・実験・評価した。
+1. **事後学習手法**（DPO / SFT / DFT）：Qwen3-235B-A22B-thinkingとQwen3-235B-A22B-Instructに対する強化学習ベースの事後学習
+
 ## 学習済みモデル（HuggingFace）
 
+Ramen Team
 | モデル | 手法 |
 |--------|------|
 | [Ramen-GRPO-Qwen3-Next-80B-A3B-Instruct](https://huggingface.co/weblab-LLM-M/Ramen-GRPO-Qwen3-Next-80B-A3B-Instruct) | GRPO |
@@ -18,6 +21,15 @@
 | [Ramen-CHORD-Qwen3-Next-80B-A3B-Instruct](https://huggingface.co/weblab-LLM-M/Ramen-CHORD-Qwen3-Next-80B-A3B-Instruct) | CHORD |
 | [Ramen-PinPointTuning-Positive-Qwen3-30B-A3B-Instruct-2507](https://huggingface.co/weblab-LLM-M/Ramen-PinPointTuning-Positive-Qwen3-30B-A3B-Instruct-2507) | Pinpoint Tuning (Positive) |
 | [Ramen-PinPointTuning-Negative-Qwen3-30B-A3B-Instruct-2507](https://huggingface.co/weblab-LLM-M/Ramen-PinPointTuning-Negative-Qwen3-30B-A3B-Instruct-2507) | Pinpoint Tuning (Negative) |
+
+医療PJ Team
+| モデル | 手法 |
+|--------|------|
+| [Weblab-MedLLM-Qwen3-235B-Instruct](https://huggingface.co/weblab-LLM-M/Weblab-MedLLM-Qwen3-235B-Instruct) | DFT |
+| [Weblab-MedLLM-Qwen3-235B-Thinking](https://huggingface.co/weblab-LLM-M/Weblab-MedLLM-Qwen3-235B-Thinking) | DFT |
+| [medicalpj-Qwen3-235B-A22B-thinking-exp8-Instruction-dft](https://huggingface.co/weblab-LLM-M/medicalpj-Qwen3-235B-A22B-thinking-exp8-Instruction-dft) | DFT |
+| [medicalpj-Qwen3-235B-A22B-Instruct-exp8-Instruction-dft](https://huggingface.co/weblab-LLM-M/medicalpj-Qwen3-235B-A22B-Instruct-exp8-Instruction-dft) | DFT |
+| [medicalpj-Qwen3-235B-A22B-Instruct-exp10-Base-Instruction-dft](https://huggingface.co/weblab-LLM-M/medicalpj-Qwen3-235B-A22B-Instruct-exp10-Base-Instruction-dft) | DFT |
 
 ## ディレクトリ構成
 
@@ -42,6 +54,7 @@ singularity-post-training-medical/
 
 ## 主要成果
 
+Ramen Team
 | モデル | 手法 | 医師国試 accuracy | 専門医試験 accuracy | 統計的有意性 |
 |--------|------|:-----------------:|:------------------:|:------------|
 | Base 80B | — | 89.5% | 69.0% | — |
@@ -53,6 +66,19 @@ singularity-post-training-medical/
 | Pinpoint (Neg) | SFT | 79.2% (−7.0) | 48.2% (−12.7) | p<0.000001 *** |
 
 詳細な分析結果は [outputs/ANALYSIS_REPORT.md](outputs/ANALYSIS_REPORT.md) を参照。
+
+医療PJ Team
+以下に主要ベンチマークの性能を示します。括弧内はベースモデルからの変化幅です。
+
+| モデル | 医師国試 | ガイドライン |
+|-----------|------|------|
+| Weblab-MedLLM-Qwen3-235B-Thinking | 82.7% (+1.7) | 60.6%(+4.1) |
+| Weblab-MedLLM-Qwen3-235B-Instruct | 79.6% (+1.3) | 59.5%(+1.4) |
+| medicalpj-Qwen3-235B-A22B-Instruct-exp8-Instruction-dft | 80.0% (+1.7) | 59.4%(+1.3) |
+| medicalpj-Qwen3-235B-A22B-thinking-exp8-Instruction-dft | 81.5% (+0.2) | 56.3%(+0.2) |
+| medicalpj-Qwen3-235B-A22B-Instruct-exp10-Base-Instruction-dft | 79.3% (+1.0) | 58.7%(+0.6) |
+
+
 
 ## 免責事項
 
@@ -80,6 +106,7 @@ This paper is based on results obtained from a project, JPNP25006, commissioned 
 | Path Patching | Wang et al. (2022) *Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small*. [arXiv:2211.00593](https://arxiv.org/abs/2211.00593) |
 | Pinpoint Tuning | Chen et al. (2024) *From Yes-Men to Truth-Tellers: Addressing Sycophancy in Large Language Models*. [arXiv:2409.01658](https://arxiv.org/abs/2409.01658) |
 | Path Patching メトリクス設計（counterfactual設計・impactメトリクス） | Zhang et al. (2025) *Exploring Translation Mechanism of Large Language Models*. [arXiv:2502.11806](https://arxiv.org/abs/2502.11806) |
+| DFT | Wu et al. (2025) *On the Generalization of SFT: A Reinforcement Learning Perspective with Reward Rectification*. [arXiv:2508.05629](https://arxiv.org/abs/2508.05629) |
 
 ### Frameworks / Implementations（実装土台・参考実装）
 
