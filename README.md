@@ -9,7 +9,7 @@ Ramen Teamとしては、以下の3系統のアプローチを実装・実験・
 2. **Pinpoint Tuning**：Qwen3-30B-A3B-Instruct-2507 に対し、Path Patching法でAttention Headの影響度を分析し、選択的にFine-tuneする手法
 
 医療PJ Teamsとしては、以下の系統のアプローチを実装・実験・評価した。
-1. **事後学習手法**（DPO / SFT / DFT）：Qwen3-235B-A22B-thinkingとQwen3-235B-A22B-Instructに対する強化学習ベースの事後学習
+1. **事後学習手法**（DPO / SFT / DFT）：Qwen3-235B-A22B-thinkingとQwen3-235B-A22B-Instructに対する事後学習
 
 ## 学習済みモデル（HuggingFace）
 
