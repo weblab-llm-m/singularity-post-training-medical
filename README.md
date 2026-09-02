@@ -84,11 +84,11 @@ Ramen Team
 
 本リポジトリの Ramen Team パートを解説した技術記事（Qiita）：
 
-1. [rule-based報酬関数の設計（データ変換とのペア）](https://qiita.com/HarachiFu/items/4f56d654070420b1f5c9)
-2. [GRPO / GSPO / CHORD の並列比較・俯瞰](https://qiita.com/HarachiFu/items/c6b9e7c27eeff83aef71)
-3. [CHORD の ms-swift 実装差分・μ/φ・SFTデータ設計](https://qiita.com/HarachiFu/items/6deea2d86ddd89e38442)
-4. [Path Patching の医療QA適用・スケール実装](https://qiita.com/HarachiFu/items/bce659551b3fea58ed40)
-5. [Pinpoint Tuning の MoE への第一手・3 仮説](https://qiita.com/HarachiFu/items/f816001c4623f5261b88)
+1. [医療LLMを RL post-training するときに使った報酬関数](https://qiita.com/HarachiFu/items/4f56d654070420b1f5c9)
+2. [医療LLM に GRPO / GSPO / CHORD を並べて学習](https://qiita.com/HarachiFu/items/c6b9e7c27eeff83aef71)
+3. [医療LLMのRL post-trainingで CHORD を ms-swift に載せて回した](https://qiita.com/HarachiFu/items/6deea2d86ddd89e38442)
+4. [Qwen3-30Bに Path Patching をかけて Head/Layer の傾向を見た話](https://qiita.com/HarachiFu/items/bce659551b3fea58ed40)
+5. [医療LLMに Pinpoint Tuning をかけて 特定の場所 だけを学習してみた話](https://qiita.com/HarachiFu/items/f816001c4623f5261b88)
 
 ## 免責事項
 
