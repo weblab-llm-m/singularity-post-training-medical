@@ -13,7 +13,7 @@ Ramen Teamとしては、以下の3系統のアプローチを実装・実験・
 
 ## 学習済みモデル（HuggingFace）
 
-Ramen Team
+Ramen Team（まとめて閲覧するには HuggingFace Collection [weblab-LLM-M / Ramen Team](https://huggingface.co/collections/weblab-LLM-M/ramen-team) を参照）
 | モデル | 手法 |
 |--------|------|
 | [Ramen-GRPO-Qwen3-Next-80B-A3B-Instruct](https://huggingface.co/weblab-LLM-M/Ramen-GRPO-Qwen3-Next-80B-A3B-Instruct) | GRPO |
@@ -79,6 +79,16 @@ Ramen Team
 | medicalpj-Qwen3-235B-A22B-Instruct-exp10-Base-Instruction-dft | 79.3% (+1.0) | 58.7%(+0.6) |
 
 
+
+## 関連記事（Ramen Team）
+
+本リポジトリの Ramen Team パートを解説した技術記事（Qiita）：
+
+1. [rule-based報酬関数の設計（データ変換とのペア）](https://qiita.com/HarachiFu/items/4f56d654070420b1f5c9)
+2. [GRPO / GSPO / CHORD の並列比較・俯瞰](https://qiita.com/HarachiFu/items/c6b9e7c27eeff83aef71)
+3. [CHORD の ms-swift 実装差分・μ/φ・SFTデータ設計](https://qiita.com/HarachiFu/items/6deea2d86ddd89e38442)
+4. [Path Patching の医療QA適用・スケール実装](https://qiita.com/HarachiFu/items/bce659551b3fea58ed40)
+5. [Pinpoint Tuning の MoE への第一手・3 仮説](https://qiita.com/HarachiFu/items/f816001c4623f5261b88)
 
 ## 免責事項
 
